@@ -2,7 +2,22 @@
 
 A premium, local-first video analysis platform designed for Apple Silicon. Extract transcripts, step-by-step tutorials, and detailed insights from Instagram Reels, YouTube Shorts, and TikTok videos using state-of-the-art MLX models.
 
-![Reel Analyser Dashboard](frontend/public/screenshot_dashboard.png) *(Placeholder: Add your own screenshot)*
+## 🌊 System Architecture
+
+```mermaid
+graph TD
+    A[User Input: URLs] --> B[FastAPI Backend]
+    B --> C{Job Queue}
+    C --> D[Worker]
+    D --> E[yt-dlp Downloader]
+    E --> F[ffmpeg Audio Extraction]
+    F --> G[MLX Whisper Transcription]
+    G --> H[MLX Qwen2.5-VL Vision Analysis]
+    H --> I[SQLite Persistence]
+    I --> J[WebSocket Notification]
+    J --> K[React Dashboard]
+    I --> L[fpdf2 PDF Export]
+```
 
 ## 🌟 Features
 
