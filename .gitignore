@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+
+# Node / Frontend
+node_modules/
+dist/
+.eslintcache
+.stylelintcache
+
+# Project Specific
+data/
+*.db
+*.log
+*.pdf
+*.wav
+*.mp4
+
+# Sample job folders (local data)
+DXI-E02EiNy/
+DXXjfzUARnJ/
+
+# macOS
+.DS_Store
