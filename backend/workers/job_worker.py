@@ -38,7 +38,7 @@ async def broadcast_progress(job_id: str, status: str, progress_pct: int, curren
             await ws.send_text(message)
         except Exception:
             disconnected.add(ws)
-    ws_connections -= disconnected
+    ws_connections.difference_update(disconnected)
 
 
 async def process_job(job_id: str, url: str, reel_id: str):
@@ -87,7 +87,7 @@ async def process_job(job_id: str, url: str, reel_id: str):
 
 async def worker_loop():
     """Main worker loop — processes jobs from the queue sequentially."""
-    logger.info("Job worker started — waiting for jobs...")
+    logger.info("Job worker started - waiting for jobs...")
     while True:
         try:
             job_id, url, reel_id = await job_queue.get()

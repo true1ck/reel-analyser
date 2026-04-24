@@ -1,5 +1,5 @@
-const API_BASE = 'http://localhost:8000/api';
-const WS_URL = 'ws://localhost:8000/ws';
+const API_BASE = 'http://localhost:8080/api';
+const WS_URL = 'ws://localhost:8080/ws';
 
 export async function fetchJobs({ status, search, limit = 50, offset = 0 } = {}) {
   const params = new URLSearchParams();

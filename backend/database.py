@@ -213,7 +213,7 @@ async def get_stats() -> dict:
                 SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_jobs,
                 SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) as queued_jobs,
                 SUM(CASE WHEN status IN ('downloading', 'transcribing', 'analyzing') THEN 1 ELSE 0 END) as processing_jobs,
-                AVG(CASE WHEN processing_ms IS NOT NULL THEN processing_ms END) as avg_processing_ms,
+                ROUND(AVG(CASE WHEN processing_ms IS NOT NULL THEN processing_ms END), 0) as avg_processing_ms,
                 COALESCE(SUM(processing_ms), 0) as total_processing_ms
             FROM jobs
         """)

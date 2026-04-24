@@ -45,7 +45,7 @@ export default function Dashboard() {
   };
 
   const activeJobs = jobs.filter(j => !['done', 'failed'].includes(j.status));
-  const recentDone = jobs.filter(j => j.status === 'done').slice(0, 5);
+  const recentJobs = jobs.filter(j => ['done', 'failed'].includes(j.status)).slice(0, 10);
 
   return (
     <div className="page">
@@ -77,7 +77,7 @@ export default function Dashboard() {
 
       <div className="job-queue">
         <h2 className="job-queue__title">📄 Recent Reports</h2>
-        {recentDone.length === 0 ? (
+        {recentJobs.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state__icon">🎬</div>
             <div className="empty-state__title">No reports yet</div>
@@ -85,7 +85,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="job-queue__list">
-            {recentDone.map(j => <JobCard key={j.id} job={j} />)}
+            {recentJobs.map(j => <JobCard key={j.id} job={j} />)}
           </div>
         )}
       </div>

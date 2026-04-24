@@ -5,13 +5,14 @@ Starts the API server with CORS, WebSocket support, and the background job worke
 """
 import asyncio
 import logging
+import httpx
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.config import FRONTEND_URL
+from backend.config import FRONTEND_URL, NVIDIA_API_KEY, USE_NVIDIA_API
 from backend.database import init_db
 from backend.routes.jobs import router as jobs_router
 from backend.routes.media import router as media_router
@@ -24,18 +25,47 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def check_nvidia_api():
+    """Verify NVIDIA API key and connectivity at startup."""
+    if not USE_NVIDIA_API:
+        logger.info("[API] NVIDIA API Key not found. Using local models only.")
+        return
+
+    logger.info("[API] Validating NVIDIA Cloud connection...")
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {NVIDIA_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": "mistralai/mistral-small-4-119b-2603",
+        "messages": [{"role": "user", "content": "test"}],
+        "max_tokens": 1
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            logger.info("[API] NVIDIA Cloud Connection: OK ✅")
+        else:
+            logger.warning(f"[API] NVIDIA Cloud returned {response.status_code}. Using local fallback. ⚠️")
+    except Exception as e:
+        logger.warning(f"[API] NVIDIA Cloud Unreachable: {e}. Using local fallback. ⚠️")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle — init DB and start worker on startup."""
-    logger.info("🎬 Reel Analyser Backend starting up...")
+    logger.info("[Main] Reel Analyser Backend starting up...")
 
     # Initialize database
     await init_db()
-    logger.info("[✓] Database initialized")
+    logger.info("[OK] Database initialized")
+
+    # Check API connectivity
+    await check_nvidia_api()
 
     # Start background worker
     worker_task = asyncio.create_task(worker_loop())
-    logger.info("[✓] Job worker started")
+    logger.info("[OK] Job worker started")
 
     yield
 

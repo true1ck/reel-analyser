@@ -110,9 +110,9 @@ async def migrate():
     
     await db.commit()
     await db.close()
-    print(f"\n✅ Migrated {imported} reel(s) into database.")
+    print(f"\n[OK] Migrated {imported} reel(s) into database.")
 
 
 if __name__ == "__main__":
-    print("🔄 Migrating existing reel folders into database...\n")
+    print("[Migration] Migrating existing reel folders into database...\n")
     asyncio.run(migrate())

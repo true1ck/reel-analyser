@@ -45,7 +45,7 @@ export default function ReportPage() {
         <div className="report-header__actions">
           {job.status === 'done' && (
             <a 
-              href={`http://localhost:8000/api/jobs/${job.id}/pdf`} 
+              href={`http://localhost:8080/api/jobs/${job.id}/pdf`} 
               className="btn btn--primary btn--sm" 
               style={{ textDecoration: 'none' }}
               download
