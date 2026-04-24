@@ -25,3 +25,8 @@ DXXjfzUARnJ/
 
 # macOS
 .DS_Store
+
+# Tool Artifacts
+graphify-out/
+scratch/
+.agents/
