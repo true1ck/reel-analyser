@@ -33,6 +33,8 @@ class JobResponse(BaseModel):
     error_message: str | None = None
     transcript: str | None = None
     analysis_md: str | None = None
+    category: str = "Uncategorized"
+    subcategory: str | None = None
     tags: list[str] = []
     notes: str | None = None
     created_at: str | None = None
@@ -68,3 +70,16 @@ class StatsResponse(BaseModel):
     processing_jobs: int = 0
     avg_processing_ms: int | None = None
     total_processing_ms: int = 0
+
+
+class CollectionItem(BaseModel):
+    """A single category/collection with aggregate info."""
+    category: str
+    total: int = 0
+    completed: int = 0
+    last_updated: str | None = None
+
+
+class CollectionsResponse(BaseModel):
+    """Response for listing collections."""
+    collections: list[CollectionItem]

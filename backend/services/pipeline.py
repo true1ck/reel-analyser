@@ -8,7 +8,7 @@ from typing import Callable
 
 from backend.services.downloader import download_video, extract_audio
 from backend.services.transcriber import transcribe_audio
-from backend.services.analyzer import analyze_video
+from backend.services.analyzer import _run_vision_pass, _run_text_pass, extract_category, EXTRACTION_PROMPT, SYNTHESIS_PROMPT
 
 
 class PipelineResult:
@@ -19,6 +19,8 @@ class PipelineResult:
         self.title: str = ""
         self.transcript: str = ""
         self.analysis_md: str = ""
+        self.category: str = "Uncategorized"
+        self.subcategory: str | None = None
         self.processing_ms: int = 0
         self.error: str | None = None
 
@@ -49,9 +51,9 @@ async def run_pipeline(
     try:
         # Step 1: Download (0% → 30%)
         await _progress("downloading", 5, "Starting download...")
-        video_path, title = download_video(url, reel_id)
+        video_path, metadata = download_video(url, reel_id)
         result.video_path = video_path
-        result.title = title
+        result.title = metadata.get("title", f"Video {reel_id}")
         await _progress("downloading", 20, "Extracting audio...")
 
         # Step 1.5: Extract audio
@@ -59,16 +61,37 @@ async def run_pipeline(
         result.audio_path = audio_path
         await _progress("downloading", 30, "Download complete")
 
-        # Step 2: Transcribe (30% → 55%)
+        # Step 2: Transcribe (30% → 50%)
         await _progress("transcribing", 35, "Transcribing audio with Whisper...")
         transcript = transcribe_audio(audio_path)
         result.transcript = transcript
-        await _progress("transcribing", 55, "Transcription complete")
+        await _progress("transcribing", 50, "Transcription complete")
 
-        # Step 3: Analyze (55% → 95%)
-        await _progress("analyzing", 60, "Loading vision model...")
-        analysis = analyze_video(video_path, transcript, title)
+        # Step 3a: Visual Extraction — Pass 1 (50% → 75%)
+        await _progress("analyzing", 55, "Pass 1: Extracting visual details from video frames...")
+        visual_observations = _run_vision_pass(video_path, EXTRACTION_PROMPT)
+        await _progress("analyzing", 75, "Pass 1 complete — visual details extracted")
+
+        # Step 3b: Synthesis — Pass 2 (75% → 95%)
+        await _progress("analyzing", 78, "Pass 2: Synthesizing tutorial from visuals + transcript...")
+        transcript_text = transcript if transcript else "(No speech detected in audio)"
+        
+        # Format metadata for the prompt
+        import json
+        meta_str = json.dumps(metadata, indent=2)
+
+        synthesis_prompt = SYNTHESIS_PROMPT.format(
+            metadata=meta_str,
+            visual_observations=visual_observations,
+            transcript=transcript_text,
+        )
+        analysis = _run_text_pass(synthesis_prompt)
         result.analysis_md = analysis
+
+        # Extract category from analysis
+        cat, subcat = extract_category(analysis)
+        result.category = cat
+        result.subcategory = subcat
         await _progress("analyzing", 95, "Analysis complete")
 
         # Done

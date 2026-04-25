@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.database import create_job, get_job, list_jobs, update_job, delete_job, get_stats
+from backend.database import create_job, get_job, list_jobs, update_job, delete_job, get_stats, list_collections
 from backend.models import (
     JobCreate,
     JobResponse,
@@ -15,6 +15,8 @@ from backend.models import (
     BatchCreateResponse,
     JobUpdate,
     StatsResponse,
+    CollectionsResponse,
+    CollectionItem,
 )
 from backend.utils.url_parser import parse_batch_input
 from backend.workers.job_worker import job_queue
@@ -40,7 +42,9 @@ async def create_jobs(body: JobCreate):
         created_jobs.append(JobResponse(**job))
 
         # Enqueue for processing
+        print(f"DEBUG: Enqueueing job {job['id']} for reel {entry['reel_id']}")
         await job_queue.put((job["id"], entry["url"], entry["reel_id"]))
+        print(f"DEBUG: Enqueued job {job['id']}, queue size: {job_queue.qsize()}")
 
     return BatchCreateResponse(jobs=created_jobs, invalid_urls=invalid_urls)
 
@@ -48,12 +52,13 @@ async def create_jobs(body: JobCreate):
 @router.get("/jobs", response_model=JobListResponse)
 async def get_jobs(
     status: str | None = Query(None, description="Filter by status"),
+    category: str | None = Query(None, description="Filter by category"),
     search: str | None = Query(None, description="Search in title, transcript, analysis"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     """List all jobs with optional filters and pagination."""
-    jobs, total = await list_jobs(status=status, limit=limit, offset=offset, search=search)
+    jobs, total = await list_jobs(status=status, category=category, limit=limit, offset=offset, search=search)
     return JobListResponse(
         jobs=[JobResponse(**j) for j in jobs],
         total=total,
@@ -139,3 +144,12 @@ async def get_dashboard_stats():
     """Get aggregate statistics for the dashboard."""
     stats = await get_stats()
     return StatsResponse(**stats)
+
+
+@router.get("/collections", response_model=CollectionsResponse)
+async def get_collections():
+    """Get all collections (categories) with their counts."""
+    collections = await list_collections()
+    return CollectionsResponse(
+        collections=[CollectionItem(**c) for c in collections]
+    )

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { getCategoryMeta } from '../pages/CollectionsPage';
 
 const STATUS_LABELS = {
   queued: 'Queued', downloading: 'Downloading', transcribing: 'Transcribing',
@@ -16,6 +17,7 @@ export default function JobCard({ job }) {
   const isDone = job.status === 'done';
   const isFailed = job.status === 'failed';
   const fillClass = isFailed ? 'progress-bar__fill--failed' : isDone ? 'progress-bar__fill--done' : '';
+  const catMeta = getCategoryMeta(job.category);
 
   return (
     <div className={`job-card glass ${isDone ? 'job-card--clickable' : ''}`} onClick={() => isDone && navigate(`/report/${job.id}`)}>
@@ -27,10 +29,17 @@ export default function JobCard({ job }) {
           </div>
           {job.title && <div className="job-card__title">{job.title}</div>}
         </div>
-        <span className={`status-badge status-badge--${job.status}`}>
-          <span className={`status-dot status-dot--${job.status}`} />
-          {STATUS_LABELS[job.status] || job.status}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isDone && job.category && (
+            <span className="category-badge category-badge--sm" style={{ '--cat-color': catMeta.color }}>
+              {catMeta.icon}
+            </span>
+          )}
+          <span className={`status-badge status-badge--${job.status}`}>
+            <span className={`status-dot status-dot--${job.status}`} />
+            {STATUS_LABELS[job.status] || job.status}
+          </span>
+        </div>
       </div>
       <div className="progress-bar">
         <div className="progress-bar__track">

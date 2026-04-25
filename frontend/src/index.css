@@ -292,14 +292,132 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ═══ CATEGORY BADGES ═══ */
+.category-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: var(--radius-xl);
+  font-size: 0.75rem; font-weight: 600;
+  background: color-mix(in srgb, var(--cat-color, #9a9ab8) 12%, transparent);
+  color: var(--cat-color, #9a9ab8);
+  border: 1px solid color-mix(in srgb, var(--cat-color, #9a9ab8) 20%, transparent);
+  white-space: nowrap;
+}
+.category-badge--sm { padding: 2px 6px; font-size: 0.8rem; }
+
+/* ═══ COLLECTIONS PAGE ═══ */
+.collections-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px; margin-bottom: 32px;
+}
+
+.collection-card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px; border-radius: var(--radius-md);
+  cursor: pointer; transition: var(--transition);
+  position: relative; overflow: hidden;
+}
+.collection-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--cat-color, var(--accent-purple));
+  border-radius: 4px 0 0 4px;
+  opacity: 0; transition: var(--transition);
+}
+.collection-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.collection-card:hover::before { opacity: 1; }
+.collection-card--active { border-color: var(--cat-color, var(--accent-purple)); box-shadow: 0 0 20px color-mix(in srgb, var(--cat-color) 15%, transparent); }
+.collection-card--active::before { opacity: 1; }
+.collection-card--empty { opacity: 0.4; cursor: default; }
+.collection-card--empty:hover { transform: none; box-shadow: none; }
+
+.collection-card__icon { font-size: 2rem; flex-shrink: 0; }
+.collection-card__info { flex: 1; min-width: 0; }
+.collection-card__label { font-weight: 600; font-size: 1rem; margin-bottom: 4px; }
+.collection-card__desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.collection-card__count { font-size: 1.8rem; font-weight: 800; flex-shrink: 0; }
+
+.collection-detail { margin-top: 16px; }
+.collection-detail__header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color);
+}
+.collection-detail__title { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; }
+.collection-detail__count { font-size: 0.9rem; color: var(--text-muted); }
+
+.collection-detail__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.collection-report-card {
+  padding: 20px; border-radius: var(--radius-md);
+  cursor: pointer; transition: var(--transition);
+}
+.collection-report-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.collection-report-card__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.collection-report-card__title { font-weight: 600; font-size: 0.95rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collection-report-card__meta { display: flex; gap: 16px; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; }
+.collection-report-card__preview { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ═══ REPORT OVERVIEW CARD ═══ */
+.report-overview {
+  padding: 20px; border-radius: var(--radius-md); margin-bottom: 20px;
+  background: linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%);
+  border: 1px solid rgba(102,126,234,0.2);
+}
+.report-overview__summary { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px; }
+.report-overview__badges { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.difficulty-badge {
+  padding: 4px 12px; border-radius: var(--radius-xl);
+  font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.difficulty-badge--beginner { background: rgba(0, 212, 170, 0.15); color: var(--accent-teal); }
+.difficulty-badge--intermediate { background: rgba(255, 217, 61, 0.15); color: var(--warning); }
+.difficulty-badge--advanced { background: rgba(255, 107, 107, 0.15); color: var(--error); }
+
+.time-badge {
+  padding: 4px 12px; border-radius: var(--radius-xl);
+  font-size: 0.75rem; font-weight: 500; color: var(--text-secondary);
+  background: rgba(154, 154, 184, 0.12);
+}
+
+/* ═══ INTERACTIVE CHECKLIST ═══ */
+.report-content input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 2px solid var(--border-hover);
+  background: transparent; cursor: pointer;
+  vertical-align: middle; margin-right: 8px;
+  position: relative; transition: var(--transition);
+  flex-shrink: 0;
+}
+.report-content input[type="checkbox"]:checked {
+  background: var(--gradient-primary); border-color: var(--accent-purple);
+}
+.report-content input[type="checkbox"]:checked::after {
+  content: '✓'; color: white; font-size: 12px; font-weight: 700;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+}
+.report-content li:has(input[type="checkbox"]) {
+  list-style: none; margin-left: -24px;
+  display: flex; align-items: flex-start; gap: 4px;
+}
+.report-checklist-item {
+  display: flex; align-items: flex-start; gap: 8px; cursor: pointer;
+  padding: 6px 0;
+}
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 900px) {
   .report-page { grid-template-columns: 1fr; }
   .report-sidebar { position: static; }
   .page { padding: 20px; }
   .header { padding: 12px 20px; }
+  .collections-grid { grid-template-columns: 1fr; }
+  .collection-detail__grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .url-input__footer { flex-direction: column; gap: 12px; align-items: stretch; }
+  .history-controls { flex-direction: column; }
 }

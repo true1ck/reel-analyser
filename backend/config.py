@@ -18,11 +18,11 @@ VISION_MODEL = "mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
 WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
 
 # ─── PROCESSING ───────────────────────────────────────────────────────────────
-MAX_TOKENS = 1024
-TEMPERATURE = 0.2
+MAX_TOKENS = 4096
+TEMPERATURE = 0.1
 REPETITION_PENALTY = 1.1
-VIDEO_FPS = 1.0
-MAX_PIXELS = 100352
+VIDEO_FPS = 2.0
+MAX_PIXELS = 602112
 
 # ─── SERVER ───────────────────────────────────────────────────────────────────
 HOST = "0.0.0.0"

@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     audio_path      TEXT,
     transcript      TEXT,
     analysis_md     TEXT,
+    category        TEXT DEFAULT 'Uncategorized',
+    subcategory     TEXT,
     tags            TEXT DEFAULT '[]',
     notes           TEXT,
     created_at      TEXT,
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_reel_id ON jobs(reel_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_category_sub ON jobs(category, subcategory);
 """
 
 
@@ -53,12 +56,27 @@ async def init_db():
     """Initialize the database schema."""
     db = await get_db()
     try:
+        # First: check for missing columns on existing tables
+        cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'")
+        table_exists = await cursor.fetchone()
+
+        if table_exists:
+            # Migrate existing table — add missing columns BEFORE schema runs indexes
+            cursor = await db.execute("PRAGMA table_info(jobs)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "platform" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN platform TEXT NOT NULL DEFAULT 'instagram'")
+            if "category" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN category TEXT DEFAULT 'Uncategorized'")
+            if "subcategory" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN subcategory TEXT")
+            await db.commit()
+
+        # Then: run full schema (CREATE TABLE IF NOT EXISTS + indexes)
         await db.executescript(SCHEMA)
-        # Check if platform column exists, add if not
-        cursor = await db.execute("PRAGMA table_info(jobs)")
-        columns = [row[1] for row in await cursor.fetchall()]
-        if "platform" not in columns:
-            await db.execute("ALTER TABLE jobs ADD COLUMN platform TEXT NOT NULL DEFAULT 'instagram'")
+
+        # Category index (safe now that column exists)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_category_sub ON jobs(category, subcategory)")
         await db.commit()
     finally:
         await db.close()
@@ -89,8 +107,8 @@ async def create_job(reel_id: str, url: str, platform: str = "instagram") -> dic
     db = await get_db()
     try:
         await db.execute(
-            """INSERT INTO jobs (id, reel_id, url, platform, status, progress_pct, tags, created_at)
-               VALUES (?, ?, ?, ?, 'queued', 0, '[]', ?)""",
+            """INSERT INTO jobs (id, reel_id, url, platform, status, progress_pct, tags, category, created_at)
+               VALUES (?, ?, ?, ?, 'queued', 0, '[]', 'Uncategorized', ?)""",
             (job_id, reel_id, url, platform, now),
         )
         await db.commit()
@@ -106,6 +124,8 @@ async def create_job(reel_id: str, url: str, platform: str = "instagram") -> dic
             "title": None,
             "transcript": None,
             "analysis_md": None,
+            "category": "Uncategorized",
+            "subcategory": None,
             "tags": [],
             "notes": None,
             "created_at": now,
@@ -132,6 +152,7 @@ async def get_job(job_id: str) -> dict | None:
 
 async def list_jobs(
     status: str | None = None,
+    category: str | None = None,
     limit: int = 50,
     offset: int = 0,
     search: str | None = None,
@@ -146,12 +167,16 @@ async def list_jobs(
             conditions.append("status = ?")
             params.append(status)
 
+        if category:
+            conditions.append("category = ?")
+            params.append(category)
+
         if search:
             conditions.append(
-                "(title LIKE ? OR transcript LIKE ? OR analysis_md LIKE ? OR reel_id LIKE ? OR platform LIKE ?)"
+                "(title LIKE ? OR transcript LIKE ? OR analysis_md LIKE ? OR reel_id LIKE ? OR platform LIKE ? OR category LIKE ?)"
             )
             search_term = f"%{search}%"
-            params.extend([search_term] * 5)
+            params.extend([search_term] * 6)
 
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
@@ -219,5 +244,26 @@ async def get_stats() -> dict:
         """)
         row = await cursor.fetchone()
         return dict(row)
+    finally:
+        await db.close()
+
+
+async def list_collections() -> list[dict]:
+    """Get all categories with their job counts."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("""
+            SELECT
+                COALESCE(category, 'Uncategorized') as category,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as completed,
+                MAX(completed_at) as last_updated
+            FROM jobs
+            WHERE status = 'done'
+            GROUP BY COALESCE(category, 'Uncategorized')
+            ORDER BY total DESC
+        """)
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
     finally:
         await db.close()

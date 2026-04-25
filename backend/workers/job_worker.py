@@ -38,7 +38,8 @@ async def broadcast_progress(job_id: str, status: str, progress_pct: int, curren
             await ws.send_text(message)
         except Exception:
             disconnected.add(ws)
-    ws_connections -= disconnected
+    if disconnected:
+        ws_connections.difference_update(disconnected)
 
 
 async def process_job(job_id: str, url: str, reel_id: str):
@@ -77,6 +78,8 @@ async def process_job(job_id: str, url: str, reel_id: str):
             audio_path=str(result.audio_path) if result.audio_path else None,
             transcript=result.transcript,
             analysis_md=result.analysis_md,
+            category=result.category,
+            subcategory=result.subcategory,
             processing_ms=result.processing_ms,
             progress_pct=100,
             current_step="Done!",

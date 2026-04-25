@@ -18,27 +18,46 @@ def check_dependencies() -> list[str]:
     return missing
 
 
-def download_video(url: str, video_id: str) -> tuple[Path, str]:
+def download_video(url: str, video_id: str) -> tuple[Path, dict]:
     """
-    Download a video from Instagram, YouTube, or TikTok.
+    Download a video from Instagram, YouTube, or TikTok and fetch metadata.
     
     Returns:
-        (video_path, title)
+        (video_path, metadata_dict)
     
     Raises:
         RuntimeError: If download fails.
     """
+    import json
     out_dir = REELS_DIR / video_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    # Using 'video' as filename to be generic
     out_template = str(out_dir / "video.%(ext)s")
 
-    # Get title
-    title_res = subprocess.run(
-        ["yt-dlp", "--get-title", "--no-playlist", url],
+    # Fetch metadata
+    meta_res = subprocess.run(
+        ["yt-dlp", "-J", "--no-playlist", url],
         capture_output=True, text=True, timeout=30,
     )
-    title = title_res.stdout.strip() or f"Video {video_id}"
+    
+    metadata = {}
+    title = f"Video {video_id}"
+    if meta_res.returncode == 0:
+        try:
+            raw_meta = json.loads(meta_res.stdout)
+            title = raw_meta.get("title") or title
+            metadata = {
+                "title": title,
+                "uploader": raw_meta.get("uploader"),
+                "description": raw_meta.get("description"),
+                "view_count": raw_meta.get("view_count"),
+                "like_count": raw_meta.get("like_count"),
+                "upload_date": raw_meta.get("upload_date"),
+                "tags": raw_meta.get("tags", []),
+            }
+        except json.JSONDecodeError:
+            metadata = {"title": title}
+    else:
+        metadata = {"title": title}
 
     # Download
     result = subprocess.run(
@@ -64,7 +83,7 @@ def download_video(url: str, video_id: str) -> tuple[Path, str]:
     if not video_files:
         raise RuntimeError(f"yt-dlp failed to download video: {result.stderr}")
 
-    return video_files[0], title
+    return video_files[0], metadata
 
 
 def extract_audio(video_path: Path) -> Path:

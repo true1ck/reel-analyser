@@ -1,9 +1,10 @@
 const API_BASE = 'http://localhost:8000/api';
 const WS_URL = 'ws://localhost:8000/ws';
 
-export async function fetchJobs({ status, search, limit = 50, offset = 0 } = {}) {
+export async function fetchJobs({ status, category, search, limit = 50, offset = 0 } = {}) {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
+  if (category) params.set('category', category);
   if (search) params.set('search', search);
   params.set('limit', limit);
   params.set('offset', offset);
@@ -53,6 +54,12 @@ export async function updateJob(id, data) {
 export async function fetchStats() {
   const res = await fetch(`${API_BASE}/stats`);
   if (!res.ok) throw new Error('Failed to fetch stats');
+  return res.json();
+}
+
+export async function fetchCollections() {
+  const res = await fetch(`${API_BASE}/collections`);
+  if (!res.ok) throw new Error('Failed to fetch collections');
   return res.json();
 }
 
