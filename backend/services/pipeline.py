@@ -2,6 +2,7 @@
 Pipeline orchestrator — coordinates download → transcribe → analyze with progress callbacks.
 """
 from __future__ import annotations
+import asyncio
 import time
 from pathlib import Path
 from typing import Callable
@@ -51,25 +52,25 @@ async def run_pipeline(
     try:
         # Step 1: Download (0% → 30%)
         await _progress("downloading", 5, "Starting download...")
-        video_path, metadata = download_video(url, reel_id)
+        video_path, metadata = await asyncio.to_thread(download_video, url, reel_id)
         result.video_path = video_path
         result.title = metadata.get("title", f"Video {reel_id}")
         await _progress("downloading", 20, "Extracting audio...")
 
         # Step 1.5: Extract audio
-        audio_path = extract_audio(video_path)
+        audio_path = await asyncio.to_thread(extract_audio, video_path)
         result.audio_path = audio_path
         await _progress("downloading", 30, "Download complete")
 
         # Step 2: Transcribe (30% → 50%)
         await _progress("transcribing", 35, "Transcribing audio with Whisper...")
-        transcript = transcribe_audio(audio_path)
+        transcript = await asyncio.to_thread(transcribe_audio, audio_path)
         result.transcript = transcript
         await _progress("transcribing", 50, "Transcription complete")
 
         # Step 3a: Visual Extraction — Pass 1 (50% → 75%)
         await _progress("analyzing", 55, "Pass 1: Extracting visual details from video frames...")
-        visual_observations = _run_vision_pass(video_path, EXTRACTION_PROMPT)
+        visual_observations = await asyncio.to_thread(_run_vision_pass, video_path, EXTRACTION_PROMPT)
         await _progress("analyzing", 75, "Pass 1 complete — visual details extracted")
 
         # Step 3b: Synthesis — Pass 2 (75% → 95%)
@@ -80,12 +81,35 @@ async def run_pipeline(
         import json
         meta_str = json.dumps(metadata, indent=2)
 
+        # Step 3b.1: Quick Web Search (75% → 78%)
+        await _progress("analyzing", 76, "Performing web search for real resources...")
+        try:
+            # Generate a search query
+            query_prompt = f"Given this video title: '{result.title}' and transcript: '{transcript_text[:1000]}'. Extract exactly 1 search query to find the main tool, software, or concept discussed. Respond with ONLY the query string (max 5 words), nothing else."
+            search_query = await asyncio.to_thread(_run_text_pass, query_prompt)
+            search_query = search_query.strip().strip('"').strip("'")
+            
+            # Search DDG
+            from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                search_results = list(ddgs.text(search_query, max_results=3))
+            
+            web_context = f"Searched for: '{search_query}'\nResults:\n"
+            for r in search_results:
+                web_context += f"- {r.get('title')}: {r.get('href')}\n  {r.get('body')}\n"
+        except Exception as e:
+            print(f"Web search failed: {e}")
+            web_context = "No web search results available."
+
+        await _progress("analyzing", 78, "Pass 2: Synthesizing tutorial from visuals + transcript + web search...")
+
         synthesis_prompt = SYNTHESIS_PROMPT.format(
             metadata=meta_str,
             visual_observations=visual_observations,
             transcript=transcript_text,
+            web_context=web_context,
         )
-        analysis = _run_text_pass(synthesis_prompt)
+        analysis = await asyncio.to_thread(_run_text_pass, synthesis_prompt)
         result.analysis_md = analysis
 
         # Extract category from analysis

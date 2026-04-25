@@ -29,6 +29,19 @@ export async function createJobs(urls) {
   return res.json();
 }
 
+export async function createChannelJobs(channel_url, limit = 5, category = "Uncategorized") {
+  const res = await fetch(`${API_BASE}/jobs/channel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel_url, limit, category }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to create channel jobs');
+  }
+  return res.json();
+}
+
 export async function retryJob(id) {
   const res = await fetch(`${API_BASE}/jobs/${id}/retry`, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to retry job');

@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from backend.database import create_job, get_job, list_jobs, update_job, delete_job, get_stats, list_collections
 from backend.models import (
     JobCreate,
+    ChannelJobCreate,
     JobResponse,
     JobListResponse,
     BatchCreateResponse,
@@ -45,6 +46,53 @@ async def create_jobs(body: JobCreate):
         print(f"DEBUG: Enqueueing job {job['id']} for reel {entry['reel_id']}")
         await job_queue.put((job["id"], entry["url"], entry["reel_id"]))
         print(f"DEBUG: Enqueued job {job['id']}, queue size: {job_queue.qsize()}")
+
+    return BatchCreateResponse(jobs=created_jobs, invalid_urls=invalid_urls)
+
+
+@router.post("/jobs/channel", response_model=BatchCreateResponse)
+async def create_channel_jobs(body: ChannelJobCreate):
+    """Fetch top videos from a channel and submit them for analysis."""
+    from backend.services.downloader import fetch_channel_videos
+    from backend.database import get_job_by_reel_id
+    
+    # 1. Fetch URLs
+    try:
+        urls = fetch_channel_videos(body.channel_url, limit=body.limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch channel: {str(e)}")
+
+    if not urls:
+        raise HTTPException(status_code=400, detail="No videos found or unsupported channel URL")
+
+    # 2. Parse URLs
+    raw_text = "\n".join(urls)
+    parsed = parse_batch_input(raw_text)
+
+    created_jobs = []
+    invalid_urls = []
+
+    for entry in parsed:
+        if entry["reel_id"] is None:
+            invalid_urls.append(entry["original"])
+            continue
+
+        # 3. Check if already analyzed/in database
+        existing = await get_job_by_reel_id(entry["reel_id"])
+        if existing is not None:
+            # Skip since we don't want to re-analyze
+            continue
+
+        # 4. Create Job
+        category_to_use = body.category if body.category else "Uncategorized"
+        job = await create_job(entry["reel_id"], entry["url"], platform=entry["platform"], category=category_to_use)
+            
+        created_jobs.append(JobResponse(**job))
+
+        # Enqueue for processing
+        print(f"DEBUG: Enqueueing channel job {job['id']} for reel {entry['reel_id']}")
+        await job_queue.put((job["id"], entry["url"], entry["reel_id"]))
+        print(f"DEBUG: Enqueued channel job {job['id']}, queue size: {job_queue.qsize()}")
 
     return BatchCreateResponse(jobs=created_jobs, invalid_urls=invalid_urls)
 

@@ -64,7 +64,8 @@ SYNTHESIS_PROMPT = """You are an expert tutorial writer creating a comprehensive
 
 1. **VISUAL OBSERVATIONS** — A detailed frame-by-frame description of everything shown on screen.
 2. **AUDIO TRANSCRIPT** — What was spoken in the video.
-3. **METADATA** — Information about the video (title, uploader, description, tags, etc).
+3. **METADATA** — Information about the video (title, uploader, description, tags, and top pinned comment). Pinned comments often contain critical links or supplementary steps.
+4. **WEB SEARCH CONTEXT** — Real internet search results related to the video's content.
 
 METADATA:
 {metadata}
@@ -74,6 +75,9 @@ VISUAL OBSERVATIONS:
 
 AUDIO TRANSCRIPT:
 {transcript}
+
+WEB SEARCH CONTEXT:
+{web_context}
 
 Using ALL sources, create a comprehensive tutorial breakdown so the reader does NOT need to watch the video.
 
@@ -116,8 +120,10 @@ You MUST use EXACTLY this Markdown structure (include ALL sections):
 - [ ] [Continue for all major steps — the user can check these off as they follow along]
 
 ### 🔗 Related Resources
-- List any URLs, documentation pages, GitHub repos, or search terms the viewer should look up.
-- If URLs were visible on screen, include them verbatim.
+- List ANY explicit URLs found in the Metadata (description, pinned comments) or Visual Observations.
+- List the EXACT, REAL URLs provided in the Web Search Context section.
+- **CRITICAL RULE:** DO NOT MAKE UP OR HALLUCINATE ANY URLs! Never generate generic links like "https://en.wikipedia.org/wiki/..." unless explicitly provided in the sources.
+- If a resource lacks a direct URL, suggest a specific Google search query (e.g., `Google Search: "Tool Name Official Documentation"`).
 
 ### 💡 Key Notes & Takeaways
 - Important warnings, prerequisites, gotchas, or tips.

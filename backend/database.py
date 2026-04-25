@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_category_sub ON jobs(category, subcategory);
 
 async def get_db() -> aiosqlite.Connection:
     """Get a database connection."""
-    db = await aiosqlite.connect(str(DB_PATH))
+    db = await aiosqlite.connect(str(DB_PATH), timeout=20.0)
     db.row_factory = aiosqlite.Row
     await db.execute("PRAGMA journal_mode=WAL")
     await db.execute("PRAGMA foreign_keys=ON")
@@ -100,7 +100,7 @@ def _row_to_dict(row: aiosqlite.Row) -> dict:
     return d
 
 
-async def create_job(reel_id: str, url: str, platform: str = "instagram") -> dict:
+async def create_job(reel_id: str, url: str, platform: str = "instagram", category: str = "Uncategorized") -> dict:
     """Create a new job record and return it."""
     job_id = str(uuid.uuid4())
     now = _now_iso()
@@ -108,8 +108,8 @@ async def create_job(reel_id: str, url: str, platform: str = "instagram") -> dic
     try:
         await db.execute(
             """INSERT INTO jobs (id, reel_id, url, platform, status, progress_pct, tags, category, created_at)
-               VALUES (?, ?, ?, ?, 'queued', 0, '[]', 'Uncategorized', ?)""",
-            (job_id, reel_id, url, platform, now),
+               VALUES (?, ?, ?, ?, 'queued', 0, '[]', ?, ?)""",
+            (job_id, reel_id, url, platform, category, now),
         )
         await db.commit()
         return {
@@ -124,7 +124,7 @@ async def create_job(reel_id: str, url: str, platform: str = "instagram") -> dic
             "title": None,
             "transcript": None,
             "analysis_md": None,
-            "category": "Uncategorized",
+            "category": category,
             "subcategory": None,
             "tags": [],
             "notes": None,
@@ -142,6 +142,19 @@ async def get_job(job_id: str) -> dict | None:
     db = await get_db()
     try:
         cursor = await db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return _row_to_dict(row)
+    finally:
+        await db.close()
+
+
+async def get_job_by_reel_id(reel_id: str) -> dict | None:
+    """Get a single job by reel_id."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM jobs WHERE reel_id = ?", (reel_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
@@ -211,9 +224,10 @@ async def update_job(job_id: str, **fields) -> dict | None:
             f"UPDATE jobs SET {set_clauses} WHERE id = ?", values
         )
         await db.commit()
-        return await get_job(job_id)
     finally:
         await db.close()
+        
+    return await get_job(job_id)
 
 
 async def delete_job(job_id: str) -> bool:

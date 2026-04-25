@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import URLInput from '../components/URLInput';
 import JobCard from '../components/JobCard';
-import { createJobs, fetchJobs, fetchStats } from '../utils/api';
+import { createJobs, createChannelJobs, fetchJobs, fetchStats } from '../utils/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,6 +44,20 @@ export default function Dashboard() {
     setSubmitting(false);
   };
 
+  const handleChannelSubmit = async (channelUrl, limit, category) => {
+    setSubmitting(true);
+    try {
+      const result = await createChannelJobs(channelUrl, limit, category);
+      if (result.jobs.length === 0) {
+        alert('No new videos found (all existing ones were skipped).');
+      } else {
+        setJobs(prev => [...result.jobs, ...prev]);
+      }
+    } catch (e) { alert('Failed to submit channel: ' + e.message); }
+    setSubmitting(false);
+  };
+
+
   const activeJobs = jobs.filter(j => !['done', 'failed'].includes(j.status));
   const recentDone = jobs.filter(j => j.status === 'done').slice(0, 5);
 
@@ -64,7 +78,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <URLInput onSubmit={handleSubmit} disabled={submitting} />
+      <URLInput onSubmit={handleSubmit} onChannelSubmit={handleChannelSubmit} disabled={submitting} />
 
       {activeJobs.length > 0 && (
         <div className="job-queue">

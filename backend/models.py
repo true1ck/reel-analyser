@@ -11,6 +11,12 @@ class JobCreate(BaseModel):
     urls: list[str] = Field(..., min_length=1, description="List of Instagram Reel URLs or IDs")
 
 
+class ChannelJobCreate(BaseModel):
+    """Request body for submitting a channel to fetch top videos."""
+    channel_url: str = Field(..., description="URL of the channel or profile")
+    limit: int = Field(5, ge=1, le=50, description="Number of recent/top videos to fetch")
+    category: str = Field("Uncategorized", description="Category or folder to save to")
+
 class JobProgress(BaseModel):
     """WebSocket progress event payload."""
     job_id: str
@@ -68,7 +74,7 @@ class StatsResponse(BaseModel):
     failed_jobs: int = 0
     queued_jobs: int = 0
     processing_jobs: int = 0
-    avg_processing_ms: int | None = None
+    avg_processing_ms: float | None = None
     total_processing_ms: int = 0
 
 
