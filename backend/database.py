@@ -33,7 +33,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at      TEXT,
     started_at      TEXT,
     completed_at    TEXT,
-    processing_ms   INTEGER
+    processing_ms   INTEGER,
+    view_count      INTEGER DEFAULT 0,
+    like_count      INTEGER DEFAULT 0,
+    share_count     INTEGER DEFAULT 0,
+    comment_count   INTEGER DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
@@ -70,6 +74,14 @@ async def init_db():
                 await db.execute("ALTER TABLE jobs ADD COLUMN category TEXT DEFAULT 'Uncategorized'")
             if "subcategory" not in columns:
                 await db.execute("ALTER TABLE jobs ADD COLUMN subcategory TEXT")
+            if "view_count" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN view_count INTEGER DEFAULT 0")
+            if "like_count" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN like_count INTEGER DEFAULT 0")
+            if "share_count" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN share_count INTEGER DEFAULT 0")
+            if "comment_count" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN comment_count INTEGER DEFAULT 0")
             await db.commit()
 
         # Then: run full schema (CREATE TABLE IF NOT EXISTS + indexes)
@@ -130,8 +142,12 @@ async def create_job(reel_id: str, url: str, platform: str = "instagram", catego
             "notes": None,
             "created_at": now,
             "started_at": None,
-            "completed_at": None,
+            "completed_at": now,
             "processing_ms": None,
+            "view_count": 0,
+            "like_count": 0,
+            "share_count": 0,
+            "comment_count": 0,
         }
     finally:
         await db.close()

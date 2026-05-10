@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { fetchJob, getVideoUrl, retryJob, deleteJob } from '../utils/api';
+import { fetchJob, getVideoUrl, retryJob, deleteJob, sendChatMessage } from '../utils/api';
 import { getCategoryMeta } from './CollectionsPage';
 
 function formatMs(ms) {
@@ -15,6 +15,13 @@ function formatMs(ms) {
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString();
+}
+
+function formatNumber(num) {
+  if (num === undefined || num === null) return '0';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
 }
 
 /** Extract quick overview fields from the analysis markdown */
@@ -54,6 +61,31 @@ export default function ReportPage() {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  
+  // Chat state
+  const AVAILABLE_SKILLS = [
+    { cmd: '\\reanalyse', desc: 'Re-watch video with Vision AI to answer visual queries' },
+    { cmd: '\\summarize', desc: 'Generate a short summary of the video' },
+    { cmd: '\\extract_tools', desc: 'List all tools mentioned in the video' },
+  ];
+  
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'system', text: 'Hi! Ask me anything about this video, or type `\\` to see available commands.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [skillFilter, setSkillFilter] = useState('');
+  const [activeSkillIdx, setActiveSkillIdx] = useState(0);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages]);
 
   useEffect(() => {
     fetchJob(id).then(setJob).catch(console.error).finally(() => setLoading(false));
@@ -73,6 +105,69 @@ export default function ReportPage() {
     navigator.clipboard.writeText(job.analysis_md || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Chat Auto-complete Logic
+  const filteredSkills = AVAILABLE_SKILLS.filter(s => s.cmd.startsWith(skillFilter));
+
+  const handleChatChange = (e) => {
+    const val = e.target.value;
+    setChatInput(val);
+    
+    // Check if the user is typing a command at the beginning or after a space
+    const words = val.split(' ');
+    const lastWord = words[words.length - 1];
+    
+    if (lastWord.startsWith('\\')) {
+      setShowSkills(true);
+      setSkillFilter(lastWord);
+      setActiveSkillIdx(0);
+    } else {
+      setShowSkills(false);
+    }
+  };
+
+  const insertSkill = (cmd) => {
+    const words = chatInput.split(' ');
+    words[words.length - 1] = cmd + ' ';
+    setChatInput(words.join(' '));
+    setShowSkills(false);
+  };
+
+  const handleChatKeyDown = (e) => {
+    if (showSkills && filteredSkills.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveSkillIdx(prev => (prev + 1) % filteredSkills.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveSkillIdx(prev => (prev - 1 + filteredSkills.length) % filteredSkills.length);
+      } else if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        insertSkill(filteredSkills[activeSkillIdx].cmd);
+      } else if (e.key === 'Escape') {
+        setShowSkills(false);
+      }
+    }
+  };
+
+  const handleChatSubmit = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatting) return;
+
+    const userMsg = chatInput.trim();
+    setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setChatInput('');
+    setIsChatting(true);
+
+    try {
+      const response = await sendChatMessage(job.id, userMsg);
+      setChatMessages(prev => [...prev, { role: 'ai', text: response.reply }]);
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: 'system', text: `**Error:** ${err.message}` }]);
+    } finally {
+      setIsChatting(false);
+    }
   };
 
   const overview = parseQuickOverview(job.analysis_md);
@@ -176,6 +271,26 @@ export default function ReportPage() {
                 <span className="report-sidebar__meta-value"><a href={job.url} target="_blank" rel="noopener" style={{ color: 'var(--accent-purple)', textDecoration: 'none' }}>Open ↗</a></span>
               </div>
             </div>
+
+            <div className="report-sidebar__meta glass" style={{ marginTop: '24px' }}>
+              <h4 style={{ marginBottom: '12px', fontSize: '0.9rem', color: 'var(--text-primary)' }}>📊 Engagement</h4>
+              <div className="report-sidebar__meta-item">
+                <span className="report-sidebar__meta-label">Views</span>
+                <span className="report-sidebar__meta-value">{formatNumber(job.view_count)}</span>
+              </div>
+              <div className="report-sidebar__meta-item">
+                <span className="report-sidebar__meta-label">Likes</span>
+                <span className="report-sidebar__meta-value">{formatNumber(job.like_count)}</span>
+              </div>
+              <div className="report-sidebar__meta-item">
+                <span className="report-sidebar__meta-label">Shares</span>
+                <span className="report-sidebar__meta-value">{formatNumber(job.share_count)}</span>
+              </div>
+              <div className="report-sidebar__meta-item">
+                <span className="report-sidebar__meta-label">Comments</span>
+                <span className="report-sidebar__meta-value">{formatNumber(job.comment_count)}</span>
+              </div>
+            </div>
           </div>
 
           <div className="report-content glass">
@@ -200,6 +315,59 @@ export default function ReportPage() {
                 <p style={{ fontStyle: 'italic' }}>{job.transcript}</p>
               </>
             )}
+          </div>
+
+          <div className="report-right-sidebar">
+            {/* Chat Panel */}
+            <div className="report-chat glass">
+              <div className="report-chat__header">
+                <h3>💬 Chat with Video</h3>
+              </div>
+              <div className="report-chat__messages">
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`chat-bubble chat-bubble--${msg.role}`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                  </div>
+                ))}
+                {isChatting && (
+                  <div className="chat-bubble chat-bubble--ai chat-bubble--loading">
+                    <span className="dot"></span><span className="dot"></span><span className="dot"></span>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+              <form className="report-chat__input" onSubmit={handleChatSubmit}>
+                <div className="report-chat__input-wrapper">
+                  {showSkills && filteredSkills.length > 0 && (
+                    <div className="skills-dropdown">
+                      {filteredSkills.map((skill, idx) => (
+                        <div 
+                          key={skill.cmd} 
+                          className={`skills-dropdown__item ${idx === activeSkillIdx ? 'skills-dropdown__item--active' : ''}`}
+                          onClick={() => insertSkill(skill.cmd)}
+                          onMouseEnter={() => setActiveSkillIdx(idx)}
+                        >
+                          <span className="skills-dropdown__cmd">{skill.cmd}</span>
+                          <span className="skills-dropdown__desc">{skill.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Ask a question or type \ ..."
+                    value={chatInput}
+                    onChange={handleChatChange}
+                    onKeyDown={handleChatKeyDown}
+                    disabled={isChatting}
+                    autoComplete="off"
+                  />
+                </div>
+                <button type="submit" disabled={isChatting || !chatInput.trim()}>
+                  Send
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

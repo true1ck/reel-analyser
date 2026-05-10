@@ -156,8 +156,10 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
                 "title": title,
                 "uploader": raw_meta.get("uploader"),
                 "description": raw_meta.get("description"),
-                "view_count": raw_meta.get("view_count"),
-                "like_count": raw_meta.get("like_count"),
+                "view_count": raw_meta.get("view_count") or 0,
+                "like_count": raw_meta.get("like_count") or 0,
+                "comment_count": raw_meta.get("comment_count") or 0,
+                "share_count": raw_meta.get("repost_count") or 0,
                 "upload_date": raw_meta.get("upload_date"),
                 "tags": raw_meta.get("tags", []),
                 "top_comment": top_comment
@@ -213,3 +215,34 @@ def extract_audio(video_path: Path) -> Path:
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg audio extraction failed: {result.stderr}")
     return audio_path
+
+
+def refresh_metadata(url: str) -> dict:
+    """
+    Fetch the latest metadata (stats) for a video without downloading it.
+    """
+    import json
+    import subprocess
+    
+    cmd = [
+        *get_yt_dlp_base_cmd(), 
+        "-J", 
+        "--no-playlist",
+        url
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        return {}
+        
+    try:
+        data = json.loads(result.stdout)
+        return {
+            "view_count": data.get("view_count") or 0,
+            "like_count": data.get("like_count") or 0,
+            "comment_count": data.get("comment_count") or 0,
+            "share_count": data.get("repost_count") or 0,
+            "title": data.get("title")
+        }
+    except Exception:
+        return {}

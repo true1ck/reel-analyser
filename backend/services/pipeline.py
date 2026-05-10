@@ -9,7 +9,9 @@ from typing import Callable
 
 from backend.services.downloader import download_video, extract_audio
 from backend.services.transcriber import transcribe_audio
-from backend.services.analyzer import _run_vision_pass, _run_text_pass, extract_category, EXTRACTION_PROMPT, SYNTHESIS_PROMPT
+from backend.services.analyzer import _run_vision_pass, _run_text_pass, extract_category
+from backend.services.router import VideoRouter
+from backend.services.strategy_factory import get_strategy_for_category
 
 
 class PipelineResult:
@@ -24,6 +26,10 @@ class PipelineResult:
         self.subcategory: str | None = None
         self.processing_ms: int = 0
         self.error: str | None = None
+        self.view_count: int = 0
+        self.like_count: int = 0
+        self.share_count: int = 0
+        self.comment_count: int = 0
 
 
 async def run_pipeline(
@@ -55,6 +61,11 @@ async def run_pipeline(
         video_path, metadata = await asyncio.to_thread(download_video, url, reel_id)
         result.video_path = video_path
         result.title = metadata.get("title", f"Video {reel_id}")
+        result.view_count = metadata.get("view_count") or 0
+        result.like_count = metadata.get("like_count") or 0
+        result.share_count = metadata.get("share_count") or 0
+        result.comment_count = metadata.get("comment_count") or 0
+        
         await _progress("downloading", 20, "Extracting audio...")
 
         # Step 1.5: Extract audio
@@ -68,42 +79,68 @@ async def run_pipeline(
         result.transcript = transcript
         await _progress("transcribing", 50, "Transcription complete")
 
-        # Step 3a: Visual Extraction — Pass 1 (50% → 75%)
-        await _progress("analyzing", 55, "Pass 1: Extracting visual details from video frames...")
-        visual_observations = await asyncio.to_thread(_run_vision_pass, video_path, EXTRACTION_PROMPT)
-        await _progress("analyzing", 75, "Pass 1 complete — visual details extracted")
-
-        # Step 3b: Synthesis — Pass 2 (75% → 95%)
-        await _progress("analyzing", 78, "Pass 2: Synthesizing tutorial from visuals + transcript...")
-        transcript_text = transcript if transcript else "(No speech detected in audio)"
-        
         # Format metadata for the prompt
         import json
         meta_str = json.dumps(metadata, indent=2)
 
+        # Step 3a: Visual Extraction — Pass 1 (50% → 75%)
+        await _progress("analyzing", 52, "Classifying video content type...")
+        transcript_text = transcript if transcript else "(No speech detected in audio)"
+        
+        category = await asyncio.to_thread(VideoRouter.classify, transcript_text, metadata)
+        strategy = get_strategy_for_category(category)
+        
+        await _progress("analyzing", 55, f"Pass 1: Extracting visual details (Category: {category})...")
+        ext_prompt = strategy.get_extraction_prompt()
+        visual_observations = await asyncio.to_thread(_run_vision_pass, video_path, ext_prompt)
+        await _progress("analyzing", 75, "Pass 1 complete — visual details extracted")
+
+        # Step 3b: Synthesis — Pass 2 (75% → 95%)
+        await _progress("analyzing", 78, f"Pass 2: Synthesizing notes from visuals + transcript...")
+
         # Step 3b.1: Quick Web Search (75% → 78%)
-        await _progress("analyzing", 76, "Performing web search for real resources...")
+        await _progress("analyzing", 76, "Performing web search for tools and alternatives...")
         try:
-            # Generate a search query
-            query_prompt = f"Given this video title: '{result.title}' and transcript: '{transcript_text[:1000]}'. Extract exactly 1 search query to find the main tool, software, or concept discussed. Respond with ONLY the query string (max 5 words), nothing else."
-            search_query = await asyncio.to_thread(_run_text_pass, query_prompt)
-            search_query = search_query.strip().strip('"').strip("'")
+            # Generate search queries for the tool AND its alternatives
+            query_prompt = f"""Given this video title: '{result.title}', 
+transcript: '{transcript_text[:1000]}', 
+and visual observations: '{visual_observations[:1000]}'. 
+Identify the primary topic, software, tool, or website discussed or shown. 
+Generate exactly two search queries separated by a newline:
+1. The exact name of the tool or main topic
+2. Top free and paid alternatives or related context
+Respond with ONLY the two queries on separate lines. DO NOT wrap in quotes, DO NOT use numbering like 1., just the raw search terms."""
             
-            # Search DDG
-            from duckduckgo_search import DDGS
+            search_queries_raw = await asyncio.to_thread(_run_text_pass, query_prompt)
+            # Clean up the output by stripping common list prefixes (1., -, *, etc)
+            import re
+            queries = []
+            for q in search_queries_raw.split('\n'):
+                cleaned = re.sub(r'^(\d+\.|\-|\*)\s*', '', q.strip()).strip('\'" \t')
+                if cleaned and "Here are" not in cleaned and "Sure" not in cleaned:
+                    queries.append(cleaned)
+            
+            # Search DDG for both queries
+            from ddgs import DDGS
+            web_context = ""
             with DDGS() as ddgs:
-                search_results = list(ddgs.text(search_query, max_results=3))
-            
-            web_context = f"Searched for: '{search_query}'\nResults:\n"
-            for r in search_results:
-                web_context += f"- {r.get('title')}: {r.get('href')}\n  {r.get('body')}\n"
+                for q in queries[:2]:  # Limit to 2 queries
+                    try:
+                        search_results = list(ddgs.text(q, max_results=3))
+                        web_context += f"Searched for: '{q}'\nResults:\n"
+                        for r in search_results:
+                            web_context += f"- {r.get('title')}: {r.get('href')}\n  {r.get('body')}\n"
+                        web_context += "\n"
+                    except Exception as inner_e:
+                        print(f"Failed searching for {q}: {inner_e}")
+                        continue
         except Exception as e:
             print(f"Web search failed: {e}")
             web_context = "No web search results available."
 
         await _progress("analyzing", 78, "Pass 2: Synthesizing tutorial from visuals + transcript + web search...")
 
-        synthesis_prompt = SYNTHESIS_PROMPT.format(
+        synthesis_prompt = strategy.get_synthesis_prompt(
             metadata=meta_str,
             visual_observations=visual_observations,
             transcript=transcript_text,

@@ -4,8 +4,9 @@ Job API routes — create, list, get, update, delete, retry analysis jobs.
 from __future__ import annotations
 import shutil
 from pathlib import Path
+import asyncio
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 
 from backend.database import create_job, get_job, list_jobs, update_job, delete_job, get_stats, list_collections
 from backend.models import (
@@ -18,6 +19,8 @@ from backend.models import (
     StatsResponse,
     CollectionsResponse,
     CollectionItem,
+    ChatRequest,
+    ChatResponse,
 )
 from backend.utils.url_parser import parse_batch_input
 from backend.workers.job_worker import job_queue
@@ -113,12 +116,27 @@ async def get_jobs(
     )
 
 
+async def _refresh_job_stats_task(job_id: str, url: str):
+    """Background task to fetch latest stats for a video."""
+    from backend.services.downloader import refresh_metadata
+    from backend.database import update_job
+    
+    stats = await asyncio.to_thread(refresh_metadata, url)
+    if stats:
+        await update_job(job_id, **stats)
+
+
 @router.get("/jobs/{job_id}", response_model=JobResponse)
-async def get_job_by_id(job_id: str):
-    """Get a single job by its ID."""
+async def get_job_by_id(job_id: str, background_tasks: BackgroundTasks):
+    """Get a single job by its ID and refresh its stats in the background."""
     job = await get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+        
+    # Trigger a background refresh if the job is complete
+    if job["status"] == "done":
+        background_tasks.add_task(_refresh_job_stats_task, job_id, job["url"])
+        
     return JobResponse(**job)
 
 
@@ -201,3 +219,64 @@ async def get_collections():
     return CollectionsResponse(
         collections=[CollectionItem(**c) for c in collections]
     )
+
+
+@router.post("/jobs/{job_id}/chat", response_model=ChatResponse)
+async def chat_with_job(job_id: str, body: ChatRequest):
+    """Interact with a specific video's analysis via chat or re-analysis."""
+    from backend.services.analyzer import _run_text_pass, _run_vision_pass
+    
+    job = await get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    user_msg = body.message.strip()
+    
+    # ── Logic Branch 1: Vision Re-analysis ──
+    if user_msg.lower().startswith(r"\reanalyse") or user_msg.lower().startswith(r"\reanalyze"):
+        # Extract the prompt
+        cmd_prefix = user_msg.split()[0]
+        custom_prompt = user_msg[len(cmd_prefix):].strip()
+        
+        if not custom_prompt:
+            custom_prompt = "Describe the video in detail."
+            
+        video_path = job.get("video_path")
+        if not video_path or not Path(video_path).exists():
+            raise HTTPException(status_code=400, detail="Video file not available for re-analysis.")
+            
+        wrapper_prompt = f"Analyze this video and strictly answer the user's question. QUESTION: {custom_prompt}"
+        
+        try:
+            # We must run this in a thread because it's synchronous
+            import asyncio
+            reply = await asyncio.to_thread(_run_vision_pass, Path(video_path), wrapper_prompt)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Vision analysis failed: {str(e)}")
+            
+        return ChatResponse(reply=reply)
+        
+    # ── Logic Branch 2: Standard Text RAG ──
+    transcript = job.get("transcript", "No transcript available.")
+    analysis_md = job.get("analysis_md", "No analysis available.")
+    
+    prompt = f"""You are a helpful AI assistant answering questions about a specific video.
+Use the provided transcript and analysis notes to answer the user's question accurately.
+If the answer is not in the provided text, just say you don't know based on the current notes.
+
+TRANSCRIPT:
+{transcript}
+
+ANALYSIS NOTES:
+{analysis_md}
+
+USER QUESTION: {user_msg}
+"""
+    
+    try:
+        import asyncio
+        reply = await asyncio.to_thread(_run_text_pass, prompt)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat generation failed: {str(e)}")
+        
+    return ChatResponse(reply=reply)

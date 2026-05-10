@@ -43,94 +43,8 @@ def get_model():
     return _model, _processor
 
 
-# ─── PASS 1: VISUAL EXTRACTION ──────────────────────────────────────────────
-EXTRACTION_PROMPT = """You are an expert video frame analyst with perfect vision. Your ONLY job is to describe exactly what you see in each frame of this video.
-
-For EVERY distinct screen/scene in the video, describe:
-
-1. **On-screen text**: Read ALL text verbatim — titles, labels, buttons, menus, headers, captions, overlay text, watermarks. Copy them EXACTLY as written.
-2. **Code & terminals**: If any code editor, terminal, IDE, or command line is visible, transcribe the COMPLETE visible code/commands character-by-character. Note the language, file names, and any syntax visible.
-3. **URLs & paths**: Read any URLs in browser bars, file paths in explorers, or links shown on screen.
-4. **UI elements**: Describe what application/website is open, what buttons/menus are being clicked, what settings are being changed.
-5. **Visual actions**: What is the cursor doing? What is being selected, typed, dragged, or clicked?
-6. **Screen transitions**: Note when the screen changes to a different app, tab, or view.
-
-Be EXHAUSTIVE. Read every pixel. Miss NOTHING. Output raw observations in chronological order.
-Do NOT summarize, do NOT interpret, do NOT structure into steps — just describe what you see."""
-
-
-# ─── PASS 2: SYNTHESIS ──────────────────────────────────────────────────────
-SYNTHESIS_PROMPT = """You are an expert tutorial writer creating a comprehensive, actionable reference guide. I am giving you two sources of information about an educational/tutorial video, along with its metadata:
-
-1. **VISUAL OBSERVATIONS** — A detailed frame-by-frame description of everything shown on screen.
-2. **AUDIO TRANSCRIPT** — What was spoken in the video.
-3. **METADATA** — Information about the video (title, uploader, description, tags, and top pinned comment). Pinned comments often contain critical links or supplementary steps.
-4. **WEB SEARCH CONTEXT** — Real internet search results related to the video's content.
-
-METADATA:
-{metadata}
-
-VISUAL OBSERVATIONS:
-{visual_observations}
-
-AUDIO TRANSCRIPT:
-{transcript}
-
-WEB SEARCH CONTEXT:
-{web_context}
-
-Using ALL sources, create a comprehensive tutorial breakdown so the reader does NOT need to watch the video.
-
-If the transcript is in Hindi, Urdu, Hinglish, or another language, TRANSLATE it and write everything in ENGLISH.
-
-You MUST use EXACTLY this Markdown structure (include ALL sections):
-
-### 📂 CATEGORY: [Create a broad category] > [Create a specific subcategory]
-*(Example: "Software Development > React UI" or "Marketing > Instagram Growth")*
-
-### 📊 Quick Overview
-- **Difficulty**: [Beginner / Intermediate / Advanced]
-- **Time to Follow**: [estimated time to replicate the tutorial, e.g. "15-20 minutes"]
-- **Summary**: [2-3 sentence TL;DR of what the tutorial teaches and the end result]
-
-### 📋 Prerequisites
-- List everything the user needs BEFORE starting (software to install, accounts to create, skills required, files to download).
-- Be specific: include version numbers if visible, exact tool names, OS requirements.
-
-### 🗣️ English Transcript Translation
-- Provide a full, clean English translation of the spoken audio. Capture every instruction and detail.
-
-### 🛠️ Tools & Resources Mentioned
-- List ALL software, websites, AI tools, plugins, extensions, or platforms shown on screen OR spoken about.
-- Include version numbers, specific model names, or URLs if they were visible.
-
-### 🪜 Exact Step-by-Step Tutorial
-1. **[Specific Action]**: Detailed explanation with exact UI paths, button names, and settings. (e.g., "Click File → Settings → Extensions → Search for 'Playwright' → Install")
-2. **[Specific Action]**: ...
-(Chronologically list EVERY action. Reference exact text/code/URLs you saw on screen. Be extremely specific — the user should be able to follow this without the video.)
-
-### 💻 Prompts / Code Used
-- Write out the EXACT text of any prompts, commands, code snippets, or configurations shown or typed in the video.
-- Use code blocks with the correct language for syntax highlighting.
-- If multiple code snippets were shown, list them all in order.
-
-### ✅ Quick Checklist
-- [ ] [First actionable item the user should complete]
-- [ ] [Second actionable item]
-- [ ] [Continue for all major steps — the user can check these off as they follow along]
-
-### 🔗 Related Resources
-- List ANY explicit URLs found in the Metadata (description, pinned comments) or Visual Observations.
-- List the EXACT, REAL URLs provided in the Web Search Context section.
-- **CRITICAL RULE:** DO NOT MAKE UP OR HALLUCINATE ANY URLs! Never generate generic links like "https://en.wikipedia.org/wiki/..." unless explicitly provided in the sources.
-- If a resource lacks a direct URL, suggest a specific Google search query (e.g., `Google Search: "Tool Name Official Documentation"`).
-
-### 💡 Key Notes & Takeaways
-- Important warnings, prerequisites, gotchas, or tips.
-- Any background context that helps understand why each step matters.
-- Common mistakes to avoid.
-
-Be precise, exhaustive, and reference specific things you observed on screen. The reader should be able to replicate the entire tutorial from your notes alone."""
+from backend.services.router import VideoRouter
+from backend.services.strategy_factory import get_strategy_for_category
 
 
 def _run_vision_pass(video_path: Path, prompt: str) -> str:
@@ -235,16 +149,24 @@ def analyze_video(video_path: Path, transcript: str, title: str) -> tuple[str, s
     Returns:
         Tuple of (markdown_analysis, category).
     """
+    # ── Pass 0: Classify Content ──
+    transcript_text = transcript if transcript else "(No speech detected in audio)"
+    metadata = {"title": title}
+    import json
+    metadata_str = json.dumps(metadata)
+    
+    category = VideoRouter.classify(transcript_text, metadata)
+    strategy = get_strategy_for_category(category)
+
     # ── Pass 1: Visual Extraction (model looks at video) ──
-    visual_observations = _run_vision_pass(video_path, EXTRACTION_PROMPT)
+    visual_observations = _run_vision_pass(video_path, strategy.get_extraction_prompt())
 
     # ── Pass 2: Synthesis (text-only reasoning over extracted info) ──
-    transcript_text = transcript if transcript else "(No speech detected in audio)"
-
-    synthesis_prompt = SYNTHESIS_PROMPT.format(
-        title=title,
+    synthesis_prompt = strategy.get_synthesis_prompt(
+        metadata=metadata_str,
         visual_observations=visual_observations,
         transcript=transcript_text,
+        web_context="No web search results available.", # Fallback since this is a helper
     )
 
     analysis = _run_text_pass(synthesis_prompt)

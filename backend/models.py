@@ -47,6 +47,10 @@ class JobResponse(BaseModel):
     started_at: str | None = None
     completed_at: str | None = None
     processing_ms: int | None = None
+    view_count: int = 0
+    like_count: int = 0
+    share_count: int = 0
+    comment_count: int = 0
 
 
 class JobListResponse(BaseModel):
@@ -89,3 +93,13 @@ class CollectionItem(BaseModel):
 class CollectionsResponse(BaseModel):
     """Response for listing collections."""
     collections: list[CollectionItem]
+
+
+class ChatRequest(BaseModel):
+    """Request body for video chat."""
+    message: str = Field(..., description="User chat message")
+
+
+class ChatResponse(BaseModel):
+    """Response for video chat."""
+    reply: str = Field(..., description="AI response")

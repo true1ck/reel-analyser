@@ -80,4 +80,17 @@ export function getVideoUrl(jobId) {
   return `${API_BASE}/jobs/${jobId}/video`;
 }
 
+export async function sendChatMessage(jobId, message) {
+  const res = await fetch(`${API_BASE}/jobs/${jobId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to send message');
+  }
+  return res.json();
+}
+
 export { WS_URL };
