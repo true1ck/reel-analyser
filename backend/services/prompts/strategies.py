@@ -40,7 +40,7 @@ WEB SEARCH CONTEXT:
 Your job is to create a comprehensive, structured breakdown of EVERYTHING discussed in this video. 
 CRITICAL: You MUST extract any hidden links or context from the Pinned Comments and Description provided in the METADATA.
 
-If the transcript is in Hindi, Urdu, Hinglish, or another language, TRANSLATE it and write everything in ENGLISH.
+**CRITICAL LANGUAGE RULE:** You must provide BOTH the original language transcript (Hindi, Hinglish, etc.) AND a full English translation. The rest of the report (strategies, tools, summary) MUST be in English.
 
 ─── STEP 1: IDENTIFY CONTENT TYPE ───
 First, determine what kind of content this video is. Common types:
@@ -63,8 +63,11 @@ You MUST include ALL of the following REQUIRED sections, then ADD content-type-s
 - **Target Audience**: [Who is this video for?]
 - **Summary**: [2-3 sentence TL;DR capturing the core message and ALL major points covered]
 
-### 🗣️ English Transcript (Full)
-- Provide a COMPLETE, clean English translation of the spoken audio transcript.
+### 🗣️ Original Transcript
+- Output the raw transcript in its original language exactly as spoken.
+
+### 🌐 English Translation (Full)
+- Provide a COMPLETE, clean English translation of the spoken audio.
 - Preserve ALL details — do not paraphrase or shorten. Every sentence matters.
 
 ### 🛠️ Tools & Resources Mentioned
@@ -139,7 +142,7 @@ WEB SEARCH CONTEXT:
 ─── CRITICAL INSTRUCTIONS ───
 Your job is to create a definitive, structured Markdown tutorial/documentation based on this video. The reader should be able to copy-paste your code and follow your steps to build exactly what is shown without watching the video.
 
-Translate transcript to English if needed.
+**CRITICAL LANGUAGE RULE:** You must provide BOTH the original language transcript (Hindi, Hinglish, etc.) AND a full English translation. The rest of the report (tutorial, summary) MUST be in English.
 
 Output EXACTLY this structure:
 
@@ -151,8 +154,11 @@ Output EXACTLY this structure:
 - **Target Audience**: [e.g., Frontend Devs, Data Scientists]
 - **Summary**: [2-3 sentence technical TL;DR]
 
-### 🗣️ English Transcript (Full)
-- Complete English translation of the spoken audio.
+### 🗣️ Original Transcript
+- Output the raw transcript in its original language exactly as spoken.
+
+### 🌐 English Translation (Full)
+- Provide a COMPLETE, clean English translation of the spoken audio.
 
 ### 🛠️ Tech Stack & Prerequisites
 - List every tool, library, framework, or CLI mentioned.
@@ -214,6 +220,8 @@ WEB SEARCH CONTEXT:
 Create a definitive, structured Markdown tutorial based on this video. 
 CRITICAL: You MUST extract any hidden links or context from the Pinned Comments and Description.
 
+**CRITICAL LANGUAGE RULE:** You must provide BOTH the original language transcript (Hindi, Hinglish, etc.) AND a full English translation. The rest of the report MUST be in English.
+
 Output EXACTLY this structure:
 
 ### 📂 CATEGORY: Education > [Specific subcategory]
@@ -222,8 +230,11 @@ Output EXACTLY this structure:
 - **Topic**: [What is being taught?]
 - **Summary**: [2-3 sentence TL;DR]
 
-### 🗣️ English Transcript (Full)
-- Complete English translation of the spoken audio.
+### 🗣️ Original Transcript
+- Output the raw transcript in its original language exactly as spoken.
+
+### 🌐 English Translation (Full)
+- Provide a COMPLETE, clean English translation of the spoken audio.
 
 ### 🪜 Step-by-Step Guide
 1. **[Step 1 Name]**: Detailed instruction.
@@ -272,6 +283,8 @@ WEB SEARCH CONTEXT:
 Create a definitive, structured Markdown strategy document based on this video. 
 CRITICAL: You MUST extract any hidden links or context from the Pinned Comments and Description.
 
+**CRITICAL LANGUAGE RULE:** You must provide BOTH the original language transcript (Hindi, Hinglish, etc.) AND a full English translation. The rest of the report MUST be in English.
+
 Output EXACTLY this structure:
 
 ### 📂 CATEGORY: Business Strategy > [Specific subcategory]
@@ -280,8 +293,11 @@ Output EXACTLY this structure:
 - **Core Strategy**: [What is the main concept?]
 - **Summary**: [2-3 sentence TL;DR]
 
-### 🗣️ English Transcript (Full)
-- Complete English translation of the spoken audio.
+### 🗣️ Original Transcript
+- Output the raw transcript in its original language exactly as spoken.
+
+### 🌐 English Translation (Full)
+- Provide a COMPLETE, clean English translation of the spoken audio.
 
 ### 📈 Key Metrics & Tools Used
 - List EVERY number or metric.

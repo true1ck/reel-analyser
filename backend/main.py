@@ -15,6 +15,7 @@ from backend.config import FRONTEND_URL
 from backend.database import init_db
 from backend.routes.jobs import router as jobs_router
 from backend.routes.media import router as media_router
+from backend.routes.global_chat import router as global_chat_router
 from backend.workers.job_worker import worker_loop, ws_connections
 
 logging.basicConfig(
@@ -67,6 +68,7 @@ app.add_middleware(
 # Register routes
 app.include_router(jobs_router)
 app.include_router(media_router)
+app.include_router(global_chat_router)
 
 
 @app.websocket("/ws")

@@ -103,3 +103,31 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """Response for video chat."""
     reply: str = Field(..., description="AI response")
+
+class GlobalChatRequest(BaseModel):
+    message: str = Field(..., description="User question")
+    category: str | None = None
+    limit: int = Field(5, description="Max number of source cards to return")
+
+class SourceCard(BaseModel):
+    job_id: str
+    title: str | None
+    category: str
+    subcategory: str | None
+    report_url: str
+    original_url: str
+    match_summary: str
+    view_count: int
+    like_count: int
+
+class WebResult(BaseModel):
+    title: str
+    url: str
+    snippet: str
+
+class GlobalChatResponse(BaseModel):
+    answer: str
+    sources: list[SourceCard]
+    web_results: list[WebResult]
+    total_reports_searched: int
+

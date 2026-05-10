@@ -205,6 +205,24 @@ async def retry_job(job_id: str):
     return JobResponse(**updated)
 
 
+@router.post("/jobs/{job_id}/stop")
+async def stop_job_by_id(job_id: str):
+    """Stop/cancel a running job."""
+    from backend.workers.job_worker import stop_job, active_tasks
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Stop requested for job_id: {job_id}")
+    logger.info(f"Currently active tasks: {list(active_tasks.keys())}")
+    
+    success = await stop_job(job_id)
+    if not success:
+        logger.warning(f"Failed to stop job {job_id} — not in active_tasks")
+        raise HTTPException(status_code=400, detail=f"Job {job_id} is not currently running. Active: {list(active_tasks.keys())}")
+        
+    return {"status": "stopping", "job_id": job_id}
+
+
 @router.get("/stats", response_model=StatsResponse)
 async def get_dashboard_stats():
     """Get aggregate statistics for the dashboard."""

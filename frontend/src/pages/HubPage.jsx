@@ -1,0 +1,255 @@
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import './HubPage.css';
+
+const SEARCH_STEPS = [
+  { icon: '🧠', label: 'Embedding your query...' },
+  { icon: '🔍', label: 'Scanning vector database...' },
+  { icon: '📚', label: 'Retrieving top reports...' },
+  { icon: '🌐', label: 'Searching the web...' },
+  { icon: '✨', label: 'Synthesising answer...' },
+];
+
+const EXAMPLE_QUERIES = [
+  'How to grow on Instagram using reels?',
+  'Best productivity tools recommended',
+  'Entrepreneurship and business tips',
+  'Marketing strategies that work in 2024',
+  'How to get more views on short videos?',
+];
+
+export default function HubPage() {
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [focused, setFocused] = useState(false);
+  const stepIntervalRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Restore state from sessionStorage on component mount
+  useEffect(() => {
+    const savedQuery = sessionStorage.getItem('hub_last_query');
+    const savedResult = sessionStorage.getItem('hub_last_result');
+    if (savedQuery) setQuery(savedQuery);
+    if (savedResult) {
+      try { setResult(JSON.parse(savedResult)); } catch (e) {}
+    }
+  }, []);
+
+  const startStepAnimation = () => {
+    setStepIndex(0);
+    stepIntervalRef.current = setInterval(() => {
+      setStepIndex(prev => {
+        if (prev >= SEARCH_STEPS.length - 1) return prev;
+        return prev + 1;
+      });
+    }, 900);
+  };
+
+  const stopStepAnimation = () => {
+    if (stepIntervalRef.current) {
+      clearInterval(stepIntervalRef.current);
+      stepIntervalRef.current = null;
+    }
+  };
+
+  const handleSearch = async (e) => {
+    if (e) e.preventDefault();
+    if (!query.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    startStepAnimation();
+    try {
+      const res = await fetch('http://localhost:8000/api/chat/global', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query, limit: 5 })
+      });
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      setResult(data);
+      sessionStorage.setItem('hub_last_query', query);
+      sessionStorage.setItem('hub_last_result', JSON.stringify(data));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      stopStepAnimation();
+      setLoading(false);
+    }
+  };
+
+  const handleExampleClick = (example) => {
+    setQuery(example);
+    setTimeout(() => {
+      handleSearch(null);
+      inputRef.current?.blur();
+    }, 50);
+  };
+
+  return (
+    <div className="hub-page wrapper">
+      {/* Header */}
+      <header className="hub-header">
+        <div className="hub-header__icon">🧠</div>
+        <h1 className="hub-header__title">
+          <span className="gradient-text">AI Research Hub</span>
+        </h1>
+        <p className="hub-header__sub">Ask anything across your entire library of analysed videos — powered by semantic search + live web.</p>
+      </header>
+
+      {/* Search Bar */}
+      <div className={`hub-search-wrap ${focused ? 'hub-search-wrap--focused' : ''} ${loading ? 'hub-search-wrap--loading' : ''}`}>
+        <div className="hub-search-glow" />
+        <form className="hub-search-form" onSubmit={handleSearch}>
+          <span className="hub-search-icon">
+            {loading ? (
+              <span className="hub-search-spinner" />
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+            )}
+          </span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Ask your library anything…"
+            className="hub-search-input"
+            disabled={loading}
+            autoComplete="off"
+          />
+          {query && !loading && (
+            <button type="button" className="hub-search-clear" onClick={() => { setQuery(''); setResult(null); setError(null); }}>
+              ✕
+            </button>
+          )}
+          <button type="submit" className="hub-search-btn" disabled={loading || !query.trim()}>
+            {loading ? 'Searching' : 'Search'}
+          </button>
+        </form>
+
+        {/* Example queries - shown when empty and not loading */}
+        {!query && !loading && !result && (
+          <div className="hub-examples">
+            <span className="hub-examples__label">Try:</span>
+            {EXAMPLE_QUERIES.map((ex, i) => (
+              <button key={i} className="hub-example-chip" onClick={() => handleExampleClick(ex)}>
+                {ex}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Loading Steps */}
+      {loading && (
+        <div className="hub-loading">
+          <div className="hub-loading__steps">
+            {SEARCH_STEPS.map((step, i) => (
+              <div key={i} className={`hub-loading__step ${i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'pending'}`}>
+                <span className="hub-loading__step-icon">{i < stepIndex ? '✓' : step.icon}</span>
+                <span className="hub-loading__step-label">{step.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="hub-loading__bar">
+            <div className="hub-loading__bar-fill" style={{ width: `${((stepIndex + 1) / SEARCH_STEPS.length) * 100}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="hub-error glass">
+          <span>⚠️</span>
+          <div>
+            <strong>Search failed</strong>
+            <p>{error}</p>
+          </div>
+          <button onClick={handleSearch} className="hub-error__retry">Retry</button>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && !loading && (
+        <div className="hub-results">
+          {/* Answer */}
+          <div className="hub-answer glass">
+            <div className="hub-answer__header">
+              <span className="hub-answer__icon">✨</span>
+              <h2>AI Answer</h2>
+              <span className="hub-answer__meta">{result.total_reports_searched} chunks searched</span>
+            </div>
+            <div className="hub-answer__body">
+              <ReactMarkdown>{result.answer}</ReactMarkdown>
+            </div>
+          </div>
+
+          <div className="hub-sources-grid">
+            {/* Library Sources */}
+            <div className="hub-library">
+              <h3 className="hub-section-title">
+                <span>📚</span> From Your Library
+                <span className="hub-section-count">{result.sources.length} match{result.sources.length !== 1 ? 'es' : ''}</span>
+              </h3>
+              {result.sources.length === 0 ? (
+                <div className="hub-empty">No matching reports found in your library.</div>
+              ) : (
+                <div className="hub-source-cards">
+                  {result.sources.map((src, i) => (
+                    <Link
+                      to={`/report/${src.job_id}`}
+                      className="hub-source-card glass"
+                      key={src.job_id}
+                      style={{ animationDelay: `${i * 0.08}s` }}
+                    >
+                      <div className="hub-source-card__rank">#{i + 1}</div>
+                      <div className="hub-source-card__content">
+                        <div className="hub-source-card__title">{src.title || 'Untitled Video'}</div>
+                        <div className="hub-source-card__meta">
+                          <span className="hub-badge">{src.category}</span>
+                          {src.subcategory && <span className="hub-badge hub-badge--sub">{src.subcategory}</span>}
+                          <span className="hub-stat">👁️ {src.view_count?.toLocaleString?.() || 0}</span>
+                          <span className="hub-stat">❤️ {src.like_count?.toLocaleString?.() || 0}</span>
+                        </div>
+                        <p className="hub-source-card__summary">{src.match_summary}</p>
+                        <div className="hub-source-card__cta">View Full Report →</div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Web Results */}
+            {result.web_results?.length > 0 && (
+              <div className="hub-web">
+                <h3 className="hub-section-title">
+                  <span>🌐</span> From the Web
+                  <span className="hub-section-count">{result.web_results.length} result{result.web_results.length !== 1 ? 's' : ''}</span>
+                </h3>
+                <div className="hub-web-cards">
+                  {result.web_results.map((r, i) => (
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="hub-web-card glass" key={i} style={{ animationDelay: `${i * 0.1}s` }}>
+                      <div className="hub-web-card__title">{r.title}</div>
+                      <p className="hub-web-card__snippet">{r.snippet}</p>
+                      <div className="hub-web-card__url">{r.url}</div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

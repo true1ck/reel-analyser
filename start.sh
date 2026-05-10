@@ -23,8 +23,8 @@ if [ ! -d "venv" ]; then
 fi
 
 # Install Python deps
-echo "[→] Installing Python dependencies..."
-./venv/bin/pip install -q -r requirements.txt 2>/dev/null
+echo "[→] Skipping pip install to avoid dependency resolver hang..."
+# ./venv/bin/pip install -q -r requirements.txt 2>/dev/null
 
 # Check Node
 if [ ! -d "frontend/node_modules" ]; then

@@ -25,8 +25,9 @@ export default function Dashboard() {
     setJobs(prev => prev.map(j =>
       j.id === msg.job_id ? { ...j, status: msg.status, progress_pct: msg.progress_pct, current_step: msg.current_step, error_message: msg.error_message } : j
     ));
-    if (msg.status === 'done' || msg.status === 'failed') {
+    if (msg.status === 'done' || msg.status === 'failed' || msg.status === 'cancelled') {
       fetchStats().then(setStats).catch(() => {});
+      loadJobs(); // Refresh the full job list
     }
   }, []);
 
@@ -58,7 +59,7 @@ export default function Dashboard() {
   };
 
 
-  const activeJobs = jobs.filter(j => !['done', 'failed'].includes(j.status));
+  const activeJobs = jobs.filter(j => !['done', 'failed', 'cancelled'].includes(j.status));
   const recentDone = jobs.filter(j => j.status === 'done').slice(0, 5);
 
   return (

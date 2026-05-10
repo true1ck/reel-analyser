@@ -166,6 +166,19 @@ async def get_job(job_id: str) -> dict | None:
         await db.close()
 
 
+async def get_jobs_by_ids(job_ids: list[str]) -> list[dict]:
+    """Fetch multiple jobs by their IDs."""
+    if not job_ids:
+        return []
+    db = await get_db()
+    try:
+        placeholders = ",".join("?" for _ in job_ids)
+        cursor = await db.execute(f"SELECT * FROM jobs WHERE id IN ({placeholders})", job_ids)
+        rows = await cursor.fetchall()
+        return [_row_to_dict(r) for r in rows]
+    finally:
+        await db.close()
+
 async def get_job_by_reel_id(reel_id: str) -> dict | None:
     """Get a single job by reel_id."""
     db = await get_db()
@@ -295,5 +308,68 @@ async def list_collections() -> list[dict]:
         """)
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def search_jobs_fts(query: str, category: str | None = None, limit: int = 10) -> list[dict]:
+    """
+    Full-text search across analysis_md + transcript.
+    Returns jobs ranked by keyword match count.
+    """
+    db = await get_db()
+    try:
+        # Ignore common stop words to avoid matching irrelevant jobs
+        stop_words = {"how", "to", "get", "a", "an", "the", "and", "or", "for", "is", "of", "in", "my", "on", "it", "this", "with"}
+        terms = [t for t in query.lower().split() if t not in stop_words and len(t) > 2]
+        
+        # If they only searched stop words, fallback to the full query
+        if not terms:
+            terms = [query.lower().strip()]
+            
+        conditions = []
+        params = []
+        for term in terms[:6]:  # cap at 6 meaningful terms
+            conditions.append(
+                "(LOWER(analysis_md) LIKE ? OR LOWER(transcript) LIKE ? OR LOWER(title) LIKE ?)"
+            )
+            t = f"%{term}%"
+            params.extend([t, t, t])
+        
+        # Use OR so partial matches work (e.g. if one word is a typo)
+        where = " OR ".join(conditions) if conditions else "1=1"
+        if category:
+            where = f"({where}) AND category = ?"
+            params.append(category)
+        
+        cursor = await db.execute(
+            f"SELECT * FROM jobs WHERE status='done' AND ({where})",
+            tuple(params)
+        )
+        rows = await cursor.fetchall()
+        jobs = [_row_to_dict(r) for r in rows]
+        
+        # In-memory scoring to rank best matches at the top
+        for job in jobs:
+            score = 0
+            text_corpus = (
+                (job.get('analysis_md') or "") + " " + 
+                (job.get('transcript') or "") + " " + 
+                (job.get('title') or "")
+            ).lower()
+            
+            for term in terms:
+                if term in text_corpus:
+                    score += 1
+            job['_match_score'] = score
+            
+        # Sort by score descending, then by completion date
+        jobs.sort(key=lambda x: (x['_match_score'], x.get('completed_at', '')), reverse=True)
+        
+        # Remove the temporary score key and return up to the limit
+        for job in jobs:
+            job.pop('_match_score', None)
+            
+        return jobs[:limit]
     finally:
         await db.close()

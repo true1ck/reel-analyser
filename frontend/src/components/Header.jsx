@@ -17,6 +17,9 @@ export default function Header() {
         <NavLink to="/history" className={({ isActive }) => `header__nav-link ${isActive ? 'header__nav-link--active' : ''}`}>
           History
         </NavLink>
+        <NavLink to="/hub" className={({ isActive }) => `header__nav-link ${isActive ? 'header__nav-link--active' : ''}`}>
+          Hub
+        </NavLink>
       </nav>
     </header>
   );

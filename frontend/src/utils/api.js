@@ -48,6 +48,15 @@ export async function retryJob(id) {
   return res.json();
 }
 
+export async function stopJob(id) {
+  const res = await fetch(`${API_BASE}/jobs/${id}/stop`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to stop job');
+  }
+  return res.json();
+}
+
 export async function deleteJob(id) {
   const res = await fetch(`${API_BASE}/jobs/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete job');
