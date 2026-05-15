@@ -8,7 +8,7 @@ class VideoRouter:
         """Classify the video type based on metadata and transcript snippet."""
         
         # Grab just enough transcript to know what the video is about (first 500 chars)
-        transcript_snippet = transcript[:500] if transcript else "(No transcript)"
+        transcript_snippet = transcript[:1000] if transcript else "(No transcript)"
         
         # Format the prompt
         prompt = ROUTER_PROMPT.format(
@@ -25,6 +25,7 @@ class VideoRouter:
             valid_categories = {
                 "TECHNOLOGY": "Technology",
                 "AI & MACHINE LEARNING": "AI & Machine Learning",
+                "CONTENT CREATION": "Content Creation",
                 "BUSINESS STRATEGY": "Business Strategy",
                 "MARKETING": "Marketing",
                 "SOCIAL MEDIA": "Social Media",

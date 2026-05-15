@@ -317,3 +317,85 @@ Output EXACTLY this structure:
 - The most important insights from the video.
 
 Be EXHAUSTIVE."""
+
+# ==========================================
+# CONTENT CREATION / AI TOOLS PROMPTS
+# ==========================================
+CONTENT_CREATION_EXTRACTION_PROMPT = """You are an expert content strategy analyst. Your job is to extract exact workflow steps and tools from video frames.
+
+1. **On-Screen Tools**: Identify the EXACT app visible — Claude, ChatGPT, Canva, Notion, etc. Note the specific interface shown (chat window, project, canvas).
+2. **Prompts & Inputs**: If the creator types a prompt or instruction into an AI tool, capture it VERBATIM. This is critical.
+3. **Output/Results**: Describe the output the AI generates — carousel slides, captions, scripts, images.
+4. **On-Screen Text & Captions**: Transcribe all text overlays, slide content, and on-screen annotations.
+5. **Workflow Actions**: What does the creator click, copy, paste, or export? Describe the exact sequence.
+
+Output raw observations in chronological order. Do NOT summarize. Prompts and outputs are the highest priority."""
+
+CONTENT_CREATION_SYNTHESIS_PROMPT = """You are an expert Content Strategist and Creator Coach. I am giving you visual observations, transcript, metadata, and web search context for a video about content creation, social media strategy, or using AI tools to create content.
+
+METADATA:
+{metadata}
+
+VISUAL OBSERVATIONS:
+{visual_observations}
+
+AUDIO TRANSCRIPT:
+{transcript}
+
+WEB SEARCH CONTEXT:
+{web_context}
+
+─── CRITICAL INSTRUCTIONS ───
+Your goal is to create a practical, actionable breakdown that a content creator can follow to replicate what was shown. Focus on the WORKFLOW, not the technology.
+
+**CRITICAL LANGUAGE RULE:** Provide BOTH the original transcript (Hindi, Urdu, Hinglish, etc.) AND a complete English translation. The rest of the report MUST be in English.
+
+Output EXACTLY this structure:
+
+### 📂 CATEGORY: Content Creation > [Specific subcategory, e.g., AI-Powered Carousels, Caption Writing, Video Scripts]
+
+### 📊 Quick Overview
+- **Core Concept**: [What is the creator teaching in one sentence?]
+- **Difficulty**: [Beginner / Intermediate / Advanced]
+- **Target Audience**: [e.g., Content Creators, Solopreneurs, Social Media Managers]
+- **Summary**: [2-3 sentence TL;DR — what the creator does, what tool they use, and what result they achieve]
+
+### 🗣️ Original Transcript
+- Output the raw transcript in its original language exactly as spoken.
+
+### 🌐 English Translation (Full)
+- Provide a COMPLETE, clean English translation of the spoken audio. Do NOT paraphrase. Every sentence matters.
+
+### 🛠️ Tools & Platforms Used
+- List every tool, platform, or AI model shown or mentioned (e.g., Claude AI, Canva, ChatGPT, Instagram, Notion).
+- Note if a specific plan/tier is required (e.g., Claude Pro, Canva Pro).
+
+### 🎯 The Core Workflow
+Describe the creator's exact workflow step-by-step:
+1. **[Step Name]**: What they did and why. Include any exact prompts, inputs, or settings used.
+2. **[Step Name]**: ...
+(Be specific enough that a reader can replicate this without watching the video.)
+
+### 💬 Exact Prompts / Instructions Used
+- If the creator typed or spoke any specific prompts into an AI tool, list them here VERBATIM.
+- If the prompt wasn't shown but was described, reconstruct it as accurately as possible.
+
+### 📱 Content Output & Results
+- Describe the final content piece produced (e.g., "A 7-slide carousel with a blue/white design, each slide having a tip with an emoji").
+- What platform is this designed for? What niche?
+
+### 🔄 Alternative Tools & Rankings
+- List similar tools a creator could use to achieve the same result.
+- **Top 3 Free** options and **Top 3 Paid** options.
+
+### 🔗 Related Resources (From Metadata)
+- Extract any links, handles, or resources from the Pinned Comments or Description. (DO NOT HALLUCINATE LINKS.)
+
+### 💡 Key Tips & Creator Insights
+- What is the creator's unique insight or shortcut?
+- What common mistake does this workflow avoid?
+
+### 🎬 Action Items
+- Concrete steps the viewer can take TODAY to implement this.
+
+Be EXHAUSTIVE. A creator reading this should be able to replicate the exact output shown in the video."""

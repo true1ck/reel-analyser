@@ -1,6 +1,6 @@
 # Reel Analyser — RAG Architecture & Implementation Reference
 
-> **Status:** Live. All features below are fully implemented and running.  
+> **Status:** Live. All features below are fully implemented and running.
 > **Updated:** May 2026
 
 ---
@@ -44,10 +44,11 @@ URL Input
 
 ### 2.1 Downloader (`backend/services/downloader.py`)
 
-**Tool:** `yt-dlp` wrapped in Python subprocess calls.  
+**Tool:** `yt-dlp` wrapped in Python subprocess calls.
 **Supports:** Instagram Reels, YouTube Shorts, TikTok, any yt-dlp-compatible URL.
 
 **What it fetches:**
+
 - Video file (MP4) → saved to `data/reels/{reel_id}/video.mp4`
 - **Metadata dictionary:**
   - `title`
@@ -59,6 +60,7 @@ URL Input
   - `top_comment` — tries to fetch pinned comment first, falls back to first comment
 
 **Key function:**
+
 ```python
 def download_video(url: str, video_id: str) -> tuple[Path, dict]:
     ...
@@ -70,7 +72,7 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
 
 ### 2.2 Transcriber (`backend/services/transcriber.py`)
 
-**Model:** `mlx-community/whisper-large-v3-turbo` (Apple Silicon MLX)  
+**Model:** `mlx-community/whisper-large-v3-turbo` (Apple Silicon MLX)
 **Task:** `translate` — always produces English output regardless of source language (Hindi, Urdu, Hinglish, etc.)
 
 ```python
@@ -85,24 +87,27 @@ def transcribe_audio(audio_path: Path) -> str:
 
 ### 2.3 VideoRouter (`backend/services/router.py`)
 
-**Purpose:** Classifies the video into a category so the correct prompt strategy can be selected.  
+**Purpose:** Classifies the video into a category so the correct prompt strategy can be selected.
 **Method:** Text-only LLM pass using `ROUTER_PROMPT` against the transcript snippet and metadata.
 
 **Valid Categories (currently):**
-| Category | Triggers Tech Prompts? |
-|---|---|
-| `Technology` | ✅ |
-| `AI & Machine Learning` | ✅ |
-| `Business Strategy` | BusinessStrategy |
-| `Marketing` | BusinessStrategy |
-| `Social Media` | BusinessStrategy |
-| `Education` | EducationStrategy |
-| `Uncategorized` | DefaultStrategy |
+
+| Category                  | Triggers Tech Prompts? |
+| ------------------------- | ---------------------- |
+| `Technology`            | ✅                     |
+| `AI & Machine Learning` | ✅                     |
+| `Business Strategy`     | BusinessStrategy       |
+| `Marketing`             | BusinessStrategy       |
+| `Social Media`          | BusinessStrategy       |
+| `Education`             | EducationStrategy      |
+| `Uncategorized`         | DefaultStrategy        |
 
 **Classification call:**
+
 ```python
 category = VideoRouter.classify(transcript_text, metadata)
 ```
+
 > **Note:** Uses a deferred import of `_run_text_pass` inside the method to avoid circular imports with `analyzer.py`.
 
 ---
@@ -112,32 +117,35 @@ category = VideoRouter.classify(transcript_text, metadata)
 **Pattern:** Strategy Pattern via `AnalysisStrategy` ABC.
 
 Each strategy provides two methods:
+
 - `get_extraction_prompt()` → prompt for Pass 1 (vision model watching the video)
 - `get_synthesis_prompt(metadata, visual_observations, transcript, web_context)` → prompt for Pass 2 (text-only reasoning)
 
-| Class | Matched Category |
-|---|---|
-| `TechTutorialStrategy` | Technology, AI & Machine Learning |
-| `BusinessStrategy` | Business Strategy, Marketing, Social Media |
-| `EducationStrategy` | Education |
-| `DefaultStrategy` | Everything else |
+| Class                    | Matched Category                           |
+| ------------------------ | ------------------------------------------ |
+| `TechTutorialStrategy` | Technology, AI & Machine Learning          |
+| `BusinessStrategy`     | Business Strategy, Marketing, Social Media |
+| `EducationStrategy`    | Education                                  |
+| `DefaultStrategy`      | Everything else                            |
 
 ---
 
 ### 2.5 Analyzer (`backend/services/analyzer.py`)
 
-**Model:** `mlx-community/Qwen2.5-VL-7B-Instruct-4bit`  
-**Framework:** `mlx-vlm` + `qwen_vl_utils`  
+**Model:** `mlx-community/Qwen2.5-VL-7B-Instruct-4bit`
+**Framework:** `mlx-vlm` + `qwen_vl_utils`
 **Model is loaded ONCE globally** and reused across all jobs to avoid the ~10s reload penalty.
 
 **Two Functions:**
 
 #### `_run_vision_pass(video_path, prompt)` → str
+
 - Sends video frames (at `VIDEO_FPS=2.0`) to Qwen2.5-VL.
 - Used for Pass 1: extracting raw visual observations.
 - Used for `\reanalyse` chat commands (re-watches video for visual-specific questions).
 
 #### `_run_text_pass(prompt)` → str
+
 - Text-only mode, no video input.
 - Used for: classification, web search query generation, synthesis (Pass 2), and standard chat RAG.
 
@@ -145,23 +153,24 @@ Each strategy provides two methods:
 
 ### 2.6 Pipeline Orchestrator (`backend/services/pipeline.py`)
 
-**Entry point:** `run_pipeline(url, reel_id, on_progress)`  
+**Entry point:** `run_pipeline(url, reel_id, on_progress)`
 **Design:** Fully async, with progress callbacks that update the DB and broadcast to WebSocket clients.
 
 **Full Pipeline Flow:**
 
-| Step | Progress | Description |
-|---|---|---|
-| Download + metadata | 5% → 20% | yt-dlp fetches video + social stats |
-| Audio extraction | 20% → 30% | ffmpeg strips audio as WAV |
-| Transcribe | 35% → 50% | Whisper → English text |
-| Classify | 52% | VideoRouter determines category via LLM |
-| Pass 1 — Vision | 55% → 75% | Qwen2.5-VL extracts visual observations |
-| Web Search | 76% → 78% | ddgs queries for tools/alternatives (2 queries, 3 results each) |
-| Pass 2 — Synthesis | 78% → 95% | LLM synthesizes full Markdown report |
-| Done | 100% | Saves to DB, broadcasts via WebSocket |
+| Step                | Progress   | Description                                                     |
+| ------------------- | ---------- | --------------------------------------------------------------- |
+| Download + metadata | 5% → 20%  | yt-dlp fetches video + social stats                             |
+| Audio extraction    | 20% → 30% | ffmpeg strips audio as WAV                                      |
+| Transcribe          | 35% → 50% | Whisper → English text                                         |
+| Classify            | 52%        | VideoRouter determines category via LLM                         |
+| Pass 1 — Vision    | 55% → 75% | Qwen2.5-VL extracts visual observations                         |
+| Web Search          | 76% → 78% | ddgs queries for tools/alternatives (2 queries, 3 results each) |
+| Pass 2 — Synthesis | 78% → 95% | LLM synthesizes full Markdown report                            |
+| Done                | 100%       | Saves to DB, broadcasts via WebSocket                           |
 
 **Result object (`PipelineResult`):**
+
 ```python
 result.video_path       # Path to local video file
 result.audio_path       # Path to local WAV file
@@ -181,10 +190,11 @@ result.comment_count
 
 ### 2.7 Database (`backend/database.py`)
 
-**Engine:** SQLite (async via `aiosqlite`)  
+**Engine:** SQLite (async via `aiosqlite`)
 **File:** `data/reel_analyser.db`
 
 **Jobs Table Schema:**
+
 ```sql
 CREATE TABLE IF NOT EXISTS jobs (
     id              TEXT PRIMARY KEY,
@@ -221,8 +231,8 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 ### 2.8 Job Worker (`backend/workers/job_worker.py`)
 
-**Design:** Single async worker consuming from an `asyncio.Queue`.  
-**Why single?** MLX models on Apple Silicon are GPU-serialized — parallel jobs would not speed anything up.  
+**Design:** Single async worker consuming from an `asyncio.Queue`.
+**Why single?** MLX models on Apple Silicon are GPU-serialized — parallel jobs would not speed anything up.
 **WebSocket broadcast:** Progress events are pushed to all connected frontend clients in real time.
 
 ---
@@ -232,15 +242,19 @@ CREATE TABLE IF NOT EXISTS jobs (
 ### Endpoint: `POST /api/jobs/{job_id}/chat`
 
 **Request body:**
+
 ```json
 { "message": "What command did he type in the terminal?" }
 ```
+
 or for vision re-analysis:
+
 ```json
 { "message": "\\reanalyse what color shirt is the host wearing?" }
 ```
 
 ### Branch 1: Standard RAG Chat
+
 - Builds a prompt with the stored `transcript` + `analysis_md` from the DB.
 - Calls `_run_text_pass()` (text-only LLM).
 - If the answer is not in the stored text, returns "I don't know based on the current notes."
@@ -258,6 +272,7 @@ ChatResponse(reply=...)
 ```
 
 ### Branch 2: `\reanalyse` Vision Command
+
 - Triggered when the user message starts with `\reanalyse` or `\reanalyze`.
 - Bypasses stored notes entirely.
 - Calls `_run_vision_pass(video_path, user_prompt)` to re-watch the actual video.
@@ -274,13 +289,14 @@ ChatResponse(reply=...)
 ```
 
 ### Skills Autocomplete (Frontend)
+
 Typing `\` in the chat input triggers a dropdown of available commands:
 
-| Command | Description |
-|---|---|
-| `\reanalyse` | Re-watch video with Vision AI for visual-specific queries |
-| `\summarize` | Generate a short summary of the video |
-| `\extract_tools` | List all tools mentioned in the video |
+| Command            | Description                                               |
+| ------------------ | --------------------------------------------------------- |
+| `\reanalyse`     | Re-watch video with Vision AI for visual-specific queries |
+| `\summarize`     | Generate a short summary of the video                     |
+| `\extract_tools` | List all tools mentioned in the video                     |
 
 Navigation: `ArrowUp/Down` to select, `Tab` or `Enter` to autocomplete, `Escape` to close.
 
@@ -291,16 +307,20 @@ Navigation: `ArrowUp/Down` to select, `Tab` or `Enter` to autocomplete, `Escape`
 All prompts live in `backend/services/prompts/strategies.py`.
 
 ### Extraction Prompts (Pass 1 — Vision Model)
+
 Each strategy has a tailored extraction focus:
+
 - **Tech:** Code, terminal commands, IDE file names, API endpoints, architecture diagrams.
 - **Education:** Step-by-step UI walkthroughs, whiteboard/slide transcription, on-screen captions.
 - **Business:** Dashboards, revenue metrics, marketing funnel diagrams, tool identification.
 - **Default:** Full general-purpose extraction (on-screen text, URLs, tools, code, actions).
 
 ### Synthesis Prompts (Pass 2 — Text-Only LLM)
+
 All synthesis prompts receive 4 inputs: `{metadata}`, `{visual_observations}`, `{transcript}`, `{web_context}`.
 
 **Shared output sections across all strategies:**
+
 - `### 📂 CATEGORY: [broad] > [subcategory]` — parsed by `extract_category()` to set DB fields
 - `### 📊 Quick Overview` — parsed by `parseQuickOverview()` in the frontend for the overview card
 - `### 🗣️ English Transcript (Full)`
@@ -311,11 +331,13 @@ All synthesis prompts receive 4 inputs: `{metadata}`, `{visual_observations}`, `
 - `### 🎯 Action Items`
 
 **Tech-specific extra sections:**
+
 - `### 💻 Code Snippets & Commands`
 - `### 🪜 Implementation Guide (Step-by-Step)`
 - `### 📐 Architecture / Logic Flow`
 
 **Business-specific extra sections:**
+
 - `### 📈 Key Metrics & Tools Used`
 - `### 🧩 The Strategy / Funnel Breakdown`
 
@@ -326,6 +348,7 @@ All synthesis prompts receive 4 inputs: `{metadata}`, `{visual_observations}`, `
 **Library:** `ddgs` (v9.8+) — the new official package replacing `duckduckgo_search`.
 
 **Flow:**
+
 1. LLM generates 2 search queries based on `title + transcript + visual_observations`.
 2. Parser strips common prefixes (`1.`, `-`, `*`, quotes) from LLM output.
 3. `DDGS.text(query, max_results=3)` is called for each query.
@@ -340,12 +363,12 @@ All synthesis prompts receive 4 inputs: `{metadata}`, `{visual_observations}`, `
 
 Fetched via `yt-dlp` and stored in the DB at analysis time. Auto-refreshed on every page load via a FastAPI `BackgroundTask`.
 
-| Field | Source | yt-dlp key |
-|---|---|---|
-| `view_count` | yt-dlp metadata | `view_count` |
-| `like_count` | yt-dlp metadata | `like_count` |
+| Field             | Source          | yt-dlp key        |
+| ----------------- | --------------- | ----------------- |
+| `view_count`    | yt-dlp metadata | `view_count`    |
+| `like_count`    | yt-dlp metadata | `like_count`    |
 | `comment_count` | yt-dlp metadata | `comment_count` |
-| `share_count` | yt-dlp metadata | `repost_count` |
+| `share_count`   | yt-dlp metadata | `repost_count`  |
 
 > **Note:** Instagram often rate-limits or hides some stats (like share counts). Values default to `0` if not available.
 
@@ -353,14 +376,15 @@ Fetched via `yt-dlp` and stored in the DB at analysis time. Auto-refreshed on ev
 
 ## 7. Frontend Architecture
 
-| File | Responsibility |
-|---|---|
-| `src/pages/ReportPage.jsx` | Main report view, chat panel, metadata sidebar |
-| `src/utils/api.js` | API helper functions (`fetchJob`, `sendChatMessage`, etc.) |
-| `src/index.css` | Full design system (glassmorphism, 3-column layout, skills dropdown) |
-| `src/pages/CollectionsPage.jsx` | Category browsing, `getCategoryMeta()` helper |
+| File                              | Responsibility                                                       |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `src/pages/ReportPage.jsx`      | Main report view, chat panel, metadata sidebar                       |
+| `src/utils/api.js`              | API helper functions (`fetchJob`, `sendChatMessage`, etc.)       |
+| `src/index.css`                 | Full design system (glassmorphism, 3-column layout, skills dropdown) |
+| `src/pages/CollectionsPage.jsx` | Category browsing,`getCategoryMeta()` helper                       |
 
 **Layout:** 3-column CSS Grid: `300px 1fr 340px`
+
 - Left: Video player, Quick Overview card, Info metadata, Engagement stats
 - Center: Full Markdown report
 - Right: Chat with Video panel (sticky, full viewport height)
@@ -369,21 +393,21 @@ Fetched via `yt-dlp` and stored in the DB at analysis time. Auto-refreshed on ev
 
 ## 8. API Reference
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/jobs` | Submit URLs for analysis |
-| `GET` | `/api/jobs` | List all jobs (filter by status, category, search) |
-| `GET` | `/api/jobs/{id}` | Get job (triggers background stats refresh) |
-| `PATCH` | `/api/jobs/{id}` | Update tags/notes |
-| `DELETE` | `/api/jobs/{id}` | Delete job + local files |
-| `POST` | `/api/jobs/{id}/retry` | Retry a failed job |
-| `POST` | `/api/jobs/{id}/chat` | Chat with video (RAG + \reanalyse) |
-| `GET` | `/api/jobs/{id}/video` | Stream the local video file |
-| `GET` | `/api/jobs/{id}/pdf` | Download the report as PDF |
-| `GET` | `/api/stats` | Dashboard aggregate stats |
-| `GET` | `/api/collections` | Category list with counts |
-| `POST` | `/api/jobs/channel` | Fetch & analyze all videos from a channel |
-| `WS` | `/ws` | Real-time progress updates |
+| Method     | Path                     | Description                                        |
+| ---------- | ------------------------ | -------------------------------------------------- |
+| `POST`   | `/api/jobs`            | Submit URLs for analysis                           |
+| `GET`    | `/api/jobs`            | List all jobs (filter by status, category, search) |
+| `GET`    | `/api/jobs/{id}`       | Get job (triggers background stats refresh)        |
+| `PATCH`  | `/api/jobs/{id}`       | Update tags/notes                                  |
+| `DELETE` | `/api/jobs/{id}`       | Delete job + local files                           |
+| `POST`   | `/api/jobs/{id}/retry` | Retry a failed job                                 |
+| `POST`   | `/api/jobs/{id}/chat`  | Chat with video (RAG + \reanalyse)                 |
+| `GET`    | `/api/jobs/{id}/video` | Stream the local video file                        |
+| `GET`    | `/api/jobs/{id}/pdf`   | Download the report as PDF                         |
+| `GET`    | `/api/stats`           | Dashboard aggregate stats                          |
+| `GET`    | `/api/collections`     | Category list with counts                          |
+| `POST`   | `/api/jobs/channel`    | Fetch & analyze all videos from a channel          |
+| `WS`     | `/ws`                  | Real-time progress updates                         |
 
 ---
 
@@ -405,11 +429,11 @@ cd frontend && npm run dev
 
 ## 10. Known Limitations & Future Improvements
 
-| Area | Current State | Planned Improvement |
-|---|---|---|
-| RAG context window | Full transcript + full analysis_md sent as string | Implement chunked vector search (ChromaDB or FAISS) for long videos |
-| Instagram auth | Requires manual `cookies.txt` update | Automated persistent browser session |
-| Chat history | No multi-turn memory within a session | Add conversation context array |
-| `\summarize` / `\extract_tools` | Defined in UI dropdown but route not implemented yet | Add these as distinct backend branches in `/chat` |
-| Search reliability | ddgs can rate-limit | Consider fallback to Tavily or SerpApi |
-| Share counts | Often 0 on Instagram | No reliable API workaround at this time |
+| Area                                | Current State                                        | Planned Improvement                                                 |
+| ----------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------- |
+| RAG context window                  | Full transcript + full analysis_md sent as string    | Implement chunked vector search (ChromaDB or FAISS) for long videos |
+| Instagram auth                      | Requires manual `cookies.txt` update               | Automated persistent browser session                                |
+| Chat history                        | No multi-turn memory within a session                | Add conversation context array                                      |
+| `\summarize` / `\extract_tools` | Defined in UI dropdown but route not implemented yet | Add these as distinct backend branches in `/chat`                 |
+| Search reliability                  | ddgs can rate-limit                                  | Consider fallback to Tavily or SerpApi                              |
+| Share counts                        | Often 0 on Instagram                                 | No reliable API workaround at this time                             |
