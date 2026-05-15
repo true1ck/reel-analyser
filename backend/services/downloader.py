@@ -108,22 +108,11 @@ def fetch_channel_videos(url: str, limit: int = 10) -> list[str]:
     return urls
 
 
-def download_video(url: str, video_id: str) -> tuple[Path, dict]:
-    """
-    Download a video from Instagram, YouTube, or TikTok and fetch metadata.
-    
-    Returns:
-        (video_path, metadata_dict)
-    
-    Raises:
-        RuntimeError: If download fails.
-    """
+def fetch_metadata(url: str) -> dict:
+    """Fetch metadata (likes, views, comments) for a given URL without downloading video."""
     import json
-    out_dir = REELS_DIR / video_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_template = str(out_dir / "video.%(ext)s")
-
-    # Fetch metadata with comments
+    import subprocess
+    
     meta_res = subprocess.run(
         [
             *get_yt_dlp_base_cmd(), "-J", "--no-playlist", 
@@ -135,7 +124,7 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
     )
     
     metadata = {}
-    title = f"Video {video_id}"
+    title = f"Video {url.split('/')[-1] if '/' in url else 'Unknown'}"
     if meta_res.returncode == 0:
         try:
             raw_meta = json.loads(meta_res.stdout)
@@ -145,7 +134,6 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
             comments = raw_meta.get("comments", [])
             top_comment = None
             if comments:
-                # Try to find a pinned one first
                 pinned = [c for c in comments if c.get("is_pinned")]
                 if pinned:
                     top_comment = pinned[0].get("text")
@@ -163,7 +151,6 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
                 "upload_date": raw_meta.get("upload_date"),
                 "tags": raw_meta.get("tags", []),
                 "top_comment": top_comment,
-                # New enriched fields
                 "play_count": raw_meta.get("view_count") or 0,  # yt-dlp view_count = plays for IG
                 "owner_username": raw_meta.get("uploader_id") or raw_meta.get("channel_id"),
                 "owner_name": raw_meta.get("uploader") or raw_meta.get("channel"),
@@ -183,6 +170,27 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
             metadata = {"title": title}
     else:
         metadata = {"title": title}
+        
+    return metadata
+
+def download_video(url: str, video_id: str) -> tuple[Path, dict]:
+    """
+    Download a video from Instagram, YouTube, or TikTok and fetch metadata.
+    
+    Returns:
+        (video_path, metadata_dict)
+    
+    Raises:
+        RuntimeError: If download fails.
+    """
+    out_dir = REELS_DIR / video_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_template = str(out_dir / "video.%(ext)s")
+
+    metadata = fetch_metadata(url)
+    # We still want to ensure title exists even if fallback
+    if not metadata.get("title"):
+        metadata["title"] = f"Video {video_id}"
 
     # Download
     result = subprocess.run(

@@ -273,10 +273,8 @@ export default function ReportPage() {
               </div>
             </div>
 
-            </div>
-
             {/* Virality Stats Panel — replaces the basic engagement card */}
-            <StatsPanel job={job} />
+            <StatsPanel job={job} onJobUpdate={setJob} />
           </div>
 
           <div className="report-content glass">

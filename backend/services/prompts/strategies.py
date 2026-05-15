@@ -58,6 +58,7 @@ You MUST include ALL of the following REQUIRED sections, then ADD content-type-s
 ### 📂 CATEGORY: [Create a broad category] > [Create a specific subcategory]
 
 ### 📊 Quick Overview
+- **Title**: [A short, catchy, 4-5 word title summarizing the list]
 - **Content Type**: [Tutorial / Strategy / Categorization / Tips / Review / Motivational / News]
 - **Difficulty**: [Beginner / Intermediate / Advanced]
 - **Target Audience**: [Who is this video for?]
@@ -149,9 +150,10 @@ Output EXACTLY this structure:
 ### 📂 CATEGORY: Software Engineering > [Specific subcategory, e.g., React, Python, AWS]
 
 ### 📊 Quick Overview
-- **Topic**: [What is being built or explained]
+- **Title**: [A short, catchy, 4-5 word title summarizing the tutorial]
+- **Topic**: [What specifically is being taught?]
 - **Difficulty**: [Beginner / Intermediate / Advanced]
-- **Target Audience**: [e.g., Frontend Devs, Data Scientists]
+- **Time to Follow**: [Estimated time to complete the tutorial]
 - **Summary**: [2-3 sentence technical TL;DR]
 
 ### 🗣️ Original Transcript
@@ -227,6 +229,7 @@ Output EXACTLY this structure:
 ### 📂 CATEGORY: Education > [Specific subcategory]
 
 ### 📊 Quick Overview
+- **Title**: [A short, catchy, 4-5 word title summarizing the lesson]
 - **Topic**: [What is being taught?]
 - **Summary**: [2-3 sentence TL;DR]
 
@@ -290,8 +293,10 @@ Output EXACTLY this structure:
 ### 📂 CATEGORY: Business Strategy > [Specific subcategory]
 
 ### 📊 Quick Overview
-- **Core Strategy**: [What is the main concept?]
-- **Summary**: [2-3 sentence TL;DR]
+- **Title**: [A short, catchy, 4-5 word title summarizing the advice]
+- **Core Message**: [The main takeaway or moral]
+- **Target Audience**: [Who needs to hear this?]
+- **Summary**: [Brief TL;DR of the tips/story shared]
 
 ### 🗣️ Original Transcript
 - Output the raw transcript in its original language exactly as spoken.
@@ -355,10 +360,10 @@ Output EXACTLY this structure:
 ### 📂 CATEGORY: Content Creation > [Specific subcategory, e.g., AI-Powered Carousels, Caption Writing, Video Scripts]
 
 ### 📊 Quick Overview
-- **Core Concept**: [What is the creator teaching in one sentence?]
-- **Difficulty**: [Beginner / Intermediate / Advanced]
-- **Target Audience**: [e.g., Content Creators, Solopreneurs, Social Media Managers]
-- **Summary**: [2-3 sentence TL;DR — what the creator does, what tool they use, and what result they achieve]
+- **Title**: [A short, catchy, 4-5 word title summarizing the strategy]
+- **Core Concept**: [The main idea or framework name]
+- **Target Audience**: [Who benefits from this?]
+- **Summary**: [Brief TL;DR of the strategy and its intended outcome]
 
 ### 🗣️ Original Transcript
 - Output the raw transcript in its original language exactly as spoken.

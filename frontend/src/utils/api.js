@@ -73,6 +73,15 @@ export async function updateJob(id, data) {
   return res.json();
 }
 
+export async function refreshJobMetadata(id) {
+  const res = await fetch(`${API_BASE}/jobs/${id}/refresh-metadata`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to refresh metadata');
+  }
+  return res.json();
+}
+
 export async function fetchStats() {
   const res = await fetch(`${API_BASE}/stats`);
   if (!res.ok) throw new Error('Failed to fetch stats');

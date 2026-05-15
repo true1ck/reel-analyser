@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { refreshJobMetadata } from '../utils/api';
 
 function fmt(n) {
   if (!n && n !== 0) return '—';
@@ -57,14 +58,29 @@ function EngagementBar({ rate }) {
   );
 }
 
-export default function StatsPanel({ job }) {
+export default function StatsPanel({ job, onJobUpdate }) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const {
-    owner_username, owner_name, published_at, duration_sec,
+    id, owner_username, owner_name, published_at, duration_sec,
     view_count = 0, play_count = 0, like_count = 0,
     share_count = 0, comment_count = 0,
     hashtags_json = '[]', comments_json = '[]',
     category, subcategory, url,
   } = job;
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const updatedJob = await refreshJobMetadata(id);
+      if (onJobUpdate) onJobUpdate(updatedJob);
+    } catch (err) {
+      alert(err.message || 'Failed to refresh metadata');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const hookRate = useMemo(() =>
     view_count > 0 ? play_count / view_count : null,
@@ -97,14 +113,44 @@ export default function StatsPanel({ job }) {
     return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
   }, [duration_sec]);
 
-  const hasAnyData = view_count > 0 || like_count > 0 || owner_username;
+  // Show panel if we have basic info or if it's currently refreshing
+  const hasAnyData = view_count > 0 || like_count > 0 || owner_username || isRefreshing;
 
-  if (!hasAnyData) return null;
+  if (!hasAnyData) {
+    return (
+      <div className="stats-panel glass" style={{ textAlign: 'center', padding: '30px 20px' }}>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>No virality data found for this reel.</p>
+        <button className="btn btn--primary btn--sm" onClick={handleRefresh} disabled={isRefreshing}>
+          {isRefreshing ? '🔄 Fetching Data...' : '🔄 Fetch Latest Metadata'}
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="stats-panel glass">
+    <div className="stats-panel glass" style={{ position: 'relative' }}>
+      {/* Refresh Button Overlay */}
+      <button 
+        onClick={handleRefresh}
+        disabled={isRefreshing}
+        style={{
+          position: 'absolute', top: 16, right: 16, 
+          background: 'rgba(102,126,234,0.15)', border: '1px solid rgba(102,126,234,0.3)',
+          color: 'var(--accent-purple)', borderRadius: 'var(--radius-xl)',
+          padding: '4px 10px', fontSize: '0.75rem', fontWeight: 600,
+          cursor: isRefreshing ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', gap: '6px',
+          transition: 'all 0.2s ease', opacity: isRefreshing ? 0.7 : 1
+        }}
+        onMouseEnter={(e) => { if(!isRefreshing) e.currentTarget.style.background = 'rgba(102,126,234,0.25)' }}
+        onMouseLeave={(e) => { if(!isRefreshing) e.currentTarget.style.background = 'rgba(102,126,234,0.15)' }}
+      >
+        <span style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none', display: 'inline-block' }}>🔄</span>
+        {isRefreshing ? 'Refreshing...' : 'Refresh'}
+      </button>
+
       {/* Creator + Meta Header */}
-      <div className="sp-header">
+      <div className="sp-header" style={{ paddingRight: 80 }}>
         <div className="sp-creator">
           <div className="sp-creator__avatar">
             {(owner_username || '?')[0].toUpperCase()}

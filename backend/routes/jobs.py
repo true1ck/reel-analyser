@@ -181,6 +181,45 @@ async def delete_job_by_id(job_id: str):
     return {"status": "deleted", "job_id": job_id}
 
 
+@router.post("/jobs/{job_id}/refresh-metadata", response_model=JobResponse)
+async def refresh_metadata(job_id: str):
+    """Re-fetch metadata (views, likes, comments, creator info) without re-downloading video."""
+    from backend.services.downloader import fetch_metadata
+    
+    job = await get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    try:
+        # Fetch fresh metadata
+        new_meta = fetch_metadata(job["url"])
+        
+        # Update database with new fields
+        update_data = {
+            "view_count": new_meta.get("view_count", 0),
+            "play_count": new_meta.get("play_count", 0),
+            "like_count": new_meta.get("like_count", 0),
+            "comment_count": new_meta.get("comment_count", 0),
+            "share_count": new_meta.get("share_count", 0),
+            "owner_username": new_meta.get("owner_username"),
+            "owner_name": new_meta.get("owner_name"),
+            "owner_id": new_meta.get("owner_id"),
+            "duration_sec": new_meta.get("duration_sec"),
+            "published_at": new_meta.get("published_at"),
+            "hashtags_json": new_meta.get("hashtags_json"),
+            "comments_json": new_meta.get("comments_json"),
+        }
+        
+        # Merge dictionary using update_job
+        updated_job = await update_job(job_id, **update_data)
+        if not updated_job:
+            raise HTTPException(status_code=500, detail="Failed to update job metadata in database")
+            
+        return JobResponse(**updated_job)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to refresh metadata: {str(e)}")
+
+
 @router.post("/jobs/{job_id}/retry", response_model=JobResponse)
 async def retry_job(job_id: str):
     """Retry a failed job."""

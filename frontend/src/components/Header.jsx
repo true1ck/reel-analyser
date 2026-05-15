@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 
-export default function Header() {
+export default function Header({ theme, toggleTheme }) {
   return (
     <header className="header">
       <div className="header__logo">
@@ -20,6 +20,20 @@ export default function Header() {
         <NavLink to="/hub" className={({ isActive }) => `header__nav-link ${isActive ? 'header__nav-link--active' : ''}`}>
           Hub
         </NavLink>
+        <button 
+          onClick={toggleTheme} 
+          style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)',
+            width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', marginLeft: '16px', transition: 'var(--transition)'
+          }}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--border-hover)'}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </nav>
     </header>
   );

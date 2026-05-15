@@ -26,6 +26,28 @@ export default function JobCard({ job }) {
   const fillClass = isFailed ? 'progress-bar__fill--failed' : isCancelled ? 'progress-bar__fill--cancelled' : isDone ? 'progress-bar__fill--done' : '';
   const catMeta = getCategoryMeta(job.category);
 
+  // Try to use the AI-generated Title, Topic, or Summary as the main title
+  let displayTitle = job.title;
+  if (job.analysis_md) {
+    const titleMatch = job.analysis_md.match(/\*\*Title\*\*:\s*([^\n]+)/i);
+    const topicMatch = job.analysis_md.match(/\*\*Topic\*\*:\s*([^\n]+)/i);
+    const summaryMatch = job.analysis_md.match(/\*\*Summary\*\*:\s*([^\n]+)/i);
+    
+    if (titleMatch && titleMatch[1]) {
+      displayTitle = titleMatch[1].trim();
+    } else if (topicMatch && topicMatch[1]) {
+      displayTitle = topicMatch[1].trim();
+    } else if (summaryMatch && summaryMatch[1]) {
+      // If falling back to summary, truncate it to ~5-6 words to look like a title
+      const words = summaryMatch[1].trim().split(/\s+/);
+      if (words.length > 7) {
+        displayTitle = words.slice(0, 7).join(' ') + '...';
+      } else {
+        displayTitle = words.join(' ');
+      }
+    }
+  }
+
   const handleStop = async (e) => {
     e.stopPropagation();
     setError(null);
@@ -35,7 +57,6 @@ export default function JobCard({ job }) {
     } catch (err) {
       console.error('Failed to stop job:', err);
       setError(err.message);
-      // Auto-clear error after 3 seconds
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -43,12 +64,14 @@ export default function JobCard({ job }) {
   return (
     <div className={`job-card glass ${isDone ? 'job-card--clickable' : ''}`} onClick={() => isDone && navigate(`/report/${job.id}`)}>
       <div className="job-card__header">
-        <div>
-          <div className="job-card__id">
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 16 }}>
+          <div className="job-card__id" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             <span style={{ marginRight: 8 }}>{PLATFORM_ICONS[job.platform] || '🎥'}</span>
-            {job.reel_id}
+            {displayTitle || 'Processing Video...'}
           </div>
-          {job.title && <div className="job-card__title">{job.title}</div>}
+          <div className="job-card__title" style={{ fontFamily: 'monospace', opacity: 0.6, marginTop: 4 }}>
+            ID: {job.reel_id} {job.owner_username ? `• @${job.owner_username}` : ''}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {error && <span className="job-card__error">{error}</span>}
