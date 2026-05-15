@@ -162,7 +162,22 @@ def download_video(url: str, video_id: str) -> tuple[Path, dict]:
                 "share_count": raw_meta.get("repost_count") or 0,
                 "upload_date": raw_meta.get("upload_date"),
                 "tags": raw_meta.get("tags", []),
-                "top_comment": top_comment
+                "top_comment": top_comment,
+                # New enriched fields
+                "play_count": raw_meta.get("view_count") or 0,  # yt-dlp view_count = plays for IG
+                "owner_username": raw_meta.get("uploader_id") or raw_meta.get("channel_id"),
+                "owner_name": raw_meta.get("uploader") or raw_meta.get("channel"),
+                "owner_id": raw_meta.get("channel_id") or raw_meta.get("uploader_id"),
+                "duration_sec": raw_meta.get("duration"),
+                "published_at": raw_meta.get("timestamp") and 
+                    __import__('datetime').datetime.fromtimestamp(
+                        raw_meta["timestamp"], tz=__import__('datetime').timezone.utc
+                    ).isoformat() if raw_meta.get("timestamp") else raw_meta.get("upload_date"),
+                "hashtags_json": json.dumps(raw_meta.get("tags", [])),
+                "comments_json": json.dumps([
+                    {"text": c.get("text", ""), "author": c.get("author", ""), "likes": c.get("like_count", 0)}
+                    for c in (comments or [])[:5]
+                ]),
             }
         except json.JSONDecodeError:
             metadata = {"title": title}

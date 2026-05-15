@@ -103,3 +103,23 @@ export async function sendChatMessage(jobId, message) {
 }
 
 export { WS_URL };
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+
+export async function fetchTopReels(sortBy = 'likes', limit = 10) {
+  const res = await fetch(`${API_BASE}/analytics/top?sort_by=${sortBy}&limit=${limit}`);
+  if (!res.ok) throw new Error('Failed to fetch top reels');
+  return res.json();
+}
+
+export async function fetchCreators(limit = 20) {
+  const res = await fetch(`${API_BASE}/analytics/creators?limit=${limit}`);
+  if (!res.ok) throw new Error('Failed to fetch creators');
+  return res.json();
+}
+
+export async function fetchTrendingHashtags(limit = 20) {
+  const res = await fetch(`${API_BASE}/analytics/trending-hashtags?limit=${limit}`);
+  if (!res.ok) throw new Error('Failed to fetch hashtags');
+  return res.json();
+}

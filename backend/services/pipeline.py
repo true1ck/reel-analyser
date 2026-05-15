@@ -30,6 +30,15 @@ class PipelineResult:
         self.like_count: int = 0
         self.share_count: int = 0
         self.comment_count: int = 0
+        # New enriched fields
+        self.play_count: int = 0
+        self.owner_username: str | None = None
+        self.owner_name: str | None = None
+        self.owner_id: str | None = None
+        self.duration_sec: float | None = None
+        self.published_at: str | None = None
+        self.hashtags_json: str = '[]'
+        self.comments_json: str = '[]'
 
 
 async def run_pipeline(
@@ -65,6 +74,14 @@ async def run_pipeline(
         result.like_count = metadata.get("like_count") or 0
         result.share_count = metadata.get("share_count") or 0
         result.comment_count = metadata.get("comment_count") or 0
+        result.play_count = metadata.get("play_count") or 0
+        result.owner_username = metadata.get("owner_username")
+        result.owner_name = metadata.get("owner_name")
+        result.owner_id = metadata.get("owner_id")
+        result.duration_sec = metadata.get("duration_sec")
+        result.published_at = metadata.get("published_at")
+        result.hashtags_json = metadata.get("hashtags_json", "[]")
+        result.comments_json = metadata.get("comments_json", "[]")
         
         await _progress("downloading", 20, "Extracting audio...")
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { fetchTopReels, fetchCreators, fetchTrendingHashtags } from '../utils/api';
 import './HubPage.css';
 
 const SEARCH_STEPS = [
@@ -19,6 +20,22 @@ const EXAMPLE_QUERIES = [
   'How to get more views on short videos?',
 ];
 
+const DISCOVER_TABS = [
+  { id: 'likes',      icon: '❤️',  label: 'Most Liked',     sortBy: 'likes' },
+  { id: 'hook_rate',  icon: '🎣',  label: 'Best Hook Rate', sortBy: 'hook_rate' },
+  { id: 'engagement', icon: '📊',  label: 'Most Engaging',  sortBy: 'engagement' },
+  { id: 'shares',     icon: '🔗',  label: 'Most Shared',    sortBy: 'shares' },
+  { id: 'creators',   icon: '👤',  label: 'Top Creators',   sortBy: 'creators' },
+  { id: 'hashtags',   icon: '#️⃣',  label: 'Trending Tags',  sortBy: 'hashtags' },
+];
+
+function fmt(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n?.toLocaleString?.() ?? n;
+}
+
 export default function HubPage() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +45,33 @@ export default function HubPage() {
   const [focused, setFocused] = useState(false);
   const stepIntervalRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Discover state
+  const [activeDiscover, setActiveDiscover] = useState(null);
+  const [discoverData, setDiscoverData] = useState(null);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+
+  const loadDiscover = async (tab) => {
+    if (activeDiscover === tab.id) {
+      setActiveDiscover(null);
+      setDiscoverData(null);
+      return;
+    }
+    setActiveDiscover(tab.id);
+    setDiscoverData(null);
+    setDiscoverLoading(true);
+    try {
+      let data;
+      if (tab.id === 'creators') data = await fetchCreators(15);
+      else if (tab.id === 'hashtags') data = await fetchTrendingHashtags(20);
+      else data = await fetchTopReels(tab.sortBy, 10);
+      setDiscoverData(data);
+    } catch (e) {
+      setDiscoverData([]);
+    } finally {
+      setDiscoverLoading(false);
+    }
+  };
 
   // Restore state from sessionStorage on component mount
   useEffect(() => {
@@ -98,10 +142,108 @@ export default function HubPage() {
         <h1 className="hub-header__title">
           <span className="gradient-text">AI Research Hub</span>
         </h1>
-        <p className="hub-header__sub">Ask anything across your entire library of analysed videos — powered by semantic search + live web.</p>
+        <p className="hub-header__sub">Ask anything across your entire library — powered by semantic search + live web.</p>
       </header>
 
-      {/* Search Bar */}
+      {/* ── DISCOVER SECTION ───────────────────────────────────────────────────── */}
+      <div className="hub-discover">
+        <div className="hub-discover__label">⚡ Discover</div>
+        <div className="hub-discover__tabs">
+          {DISCOVER_TABS.map(tab => (
+            <button
+              key={tab.id}
+              className={`hub-discover__tab ${activeDiscover === tab.id ? 'hub-discover__tab--active' : ''}`}
+              onClick={() => loadDiscover(tab)}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {activeDiscover && (
+          <div className="hub-discover__panel glass">
+            {discoverLoading && (
+              <div className="hub-discover__loading">
+                <span className="hub-search-spinner" />
+                <span>Loading...</span>
+              </div>
+            )}
+
+            {!discoverLoading && discoverData && activeDiscover === 'creators' && (
+              <>
+                <div className="hub-lb-header">
+                  <span className="hub-lb-rank">#</span>
+                  <span>Creator</span>
+                  <span>Reels</span>
+                  <span>Total Views</span>
+                  <span>Total Likes</span>
+                </div>
+                {discoverData.map((c, i) => (
+                  <div key={c.owner_username} className="hub-lb-row">
+                    <span className="hub-lb-rank hub-lb-rank--num">{i + 1}</span>
+                    <span className="hub-lb-creator">@{c.owner_username}{c.owner_name ? ` · ${c.owner_name}` : ''}</span>
+                    <span className="hub-lb-stat">{c.reel_count}</span>
+                    <span className="hub-lb-stat">{fmt(c.total_views)}</span>
+                    <span className="hub-lb-stat" style={{color:'#f43f5e'}}>❤️ {fmt(c.total_likes)}</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {!discoverLoading && discoverData && activeDiscover === 'hashtags' && (
+              <div className="hub-hashtags-grid">
+                {discoverData.map((h, i) => (
+                  <div key={h.tag} className="hub-hashtag-card">
+                    <span className="hub-hashtag-rank">#{i+1}</span>
+                    <span className="hub-hashtag-tag">#{h.tag}</span>
+                    <span className="hub-hashtag-stat">{h.count} reels</span>
+                    <span className="hub-hashtag-views">{fmt(h.total_views)} views</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!discoverLoading && discoverData && !['creators','hashtags'].includes(activeDiscover) && (
+              <>
+                <div className="hub-lb-header">
+                  <span className="hub-lb-rank">#</span>
+                  <span>Title</span>
+                  <span>Creator</span>
+                  <span>❤️ Likes</span>
+                  <span>👁 Views</span>
+                  {activeDiscover === 'hook_rate' && <span>🎣 Hook</span>}
+                  {activeDiscover === 'engagement' && <span>📊 Eng%</span>}
+                </div>
+                {discoverData.map((r, i) => (
+                  <Link key={r.id} to={`/report/${r.id}`} className="hub-lb-row hub-lb-row--link">
+                    <span className="hub-lb-rank hub-lb-rank--num">{i + 1}</span>
+                    <span className="hub-lb-title">{r.title || r.reel_id}</span>
+                    <span className="hub-lb-creator">{r.owner_username ? `@${r.owner_username}` : '—'}</span>
+                    <span className="hub-lb-stat" style={{color:'#f43f5e'}}>❤️ {fmt(r.like_count)}</span>
+                    <span className="hub-lb-stat">👁 {fmt(r.view_count)}</span>
+                    {activeDiscover === 'hook_rate' && (
+                      <span className="hub-lb-stat" style={{color: r.hook_rate >= 2 ? '#00d4a8' : r.hook_rate >= 1 ? '#f5a623' : '#e74c3c'}}>
+                        {r.hook_rate != null ? r.hook_rate.toFixed(2) + 'x' : '—'}
+                      </span>
+                    )}
+                    {activeDiscover === 'engagement' && (
+                      <span className="hub-lb-stat" style={{color: r.engagement_rate >= 0.15 ? '#00d4a8' : '#f5a623'}}>
+                        {r.engagement_rate != null ? (r.engagement_rate * 100).toFixed(1) + '%' : '—'}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </>
+            )}
+
+            {!discoverLoading && discoverData?.length === 0 && (
+              <div className="hub-empty">No data yet — analyze some reels first!</div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className={`hub-search-wrap ${focused ? 'hub-search-wrap--focused' : ''} ${loading ? 'hub-search-wrap--loading' : ''}`}>
         <div className="hub-search-glow" />
         <form className="hub-search-form" onSubmit={handleSearch}>

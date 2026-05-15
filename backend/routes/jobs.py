@@ -8,7 +8,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 
-from backend.database import create_job, get_job, list_jobs, update_job, delete_job, get_stats, list_collections
+from backend.database import create_job, get_job, list_jobs, update_job, delete_job, get_stats, list_collections, get_top_reels, get_creators, get_trending_hashtags
 from backend.models import (
     JobCreate,
     ChannelJobCreate,
@@ -21,6 +21,9 @@ from backend.models import (
     CollectionItem,
     ChatRequest,
     ChatResponse,
+    TopReelItem,
+    CreatorItem,
+    HashtagItem,
 )
 from backend.utils.url_parser import parse_batch_input
 from backend.workers.job_worker import job_queue
@@ -273,6 +276,51 @@ async def chat_with_job(job_id: str, body: ChatRequest):
             raise HTTPException(status_code=500, detail=f"Vision analysis failed: {str(e)}")
             
         return ChatResponse(reply=reply)
+
+
+# ── Analytics Endpoints ────────────────────────────────────────────────────────────
+
+@router.get("/analytics/top", response_model=list[TopReelItem])
+async def get_top_reels_endpoint(
+    sort_by: str = Query("likes", description="likes | plays | shares | comments | hook_rate | engagement"),
+    limit: int = Query(10, ge=1, le=50)
+):
+    """Get top reels sorted by a virality metric. Powers the Hub leaderboard."""
+    rows = await get_top_reels(sort_by=sort_by, limit=limit)
+    items = []
+    for r in rows:
+        v = r.get("view_count") or 0
+        p = r.get("play_count") or 0
+        l = r.get("like_count") or 0
+        c = r.get("comment_count") or 0
+        s = r.get("share_count") or 0
+        hook_rate = round(p / v, 2) if v > 0 else None
+        engagement_rate = round((l + c + s) / v, 4) if v > 0 else None
+        items.append(TopReelItem(
+            id=r["id"], reel_id=r["reel_id"], url=r["url"],
+            title=r.get("title"), owner_username=r.get("owner_username"),
+            owner_name=r.get("owner_name"), category=r.get("category", "Uncategorized"),
+            subcategory=r.get("subcategory"), view_count=v, play_count=p,
+            like_count=l, share_count=s, comment_count=c,
+            duration_sec=r.get("duration_sec"), published_at=r.get("published_at"),
+            hook_rate=hook_rate, engagement_rate=engagement_rate,
+        ))
+    return items
+
+
+@router.get("/analytics/creators", response_model=list[CreatorItem])
+async def get_creators_endpoint(limit: int = Query(20, ge=1, le=100)):
+    """Get top creators by reel count and engagement."""
+    rows = await get_creators(limit=limit)
+    return [CreatorItem(**r) for r in rows]
+
+
+@router.get("/analytics/trending-hashtags", response_model=list[HashtagItem])
+async def get_trending_hashtags_endpoint(limit: int = Query(20, ge=1, le=100)):
+    """Get trending hashtags across all analyzed reels."""
+    tags = await get_trending_hashtags(limit=limit)
+    return [HashtagItem(**t) for t in tags]
+
         
     # ── Logic Branch 2: Standard Text RAG ──
     transcript = job.get("transcript", "No transcript available.")

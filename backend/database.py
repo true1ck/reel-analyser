@@ -37,13 +37,24 @@ CREATE TABLE IF NOT EXISTS jobs (
     view_count      INTEGER DEFAULT 0,
     like_count      INTEGER DEFAULT 0,
     share_count     INTEGER DEFAULT 0,
-    comment_count   INTEGER DEFAULT 0
+    comment_count   INTEGER DEFAULT 0,
+    play_count      INTEGER DEFAULT 0,
+    owner_username  TEXT,
+    owner_name      TEXT,
+    owner_id        TEXT,
+    duration_sec    REAL,
+    published_at    TEXT,
+    hashtags_json   TEXT DEFAULT '[]',
+    comments_json   TEXT DEFAULT '[]'
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_reel_id ON jobs(reel_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_category_sub ON jobs(category, subcategory);
+CREATE INDEX IF NOT EXISTS idx_jobs_owner ON jobs(owner_username);
+CREATE INDEX IF NOT EXISTS idx_jobs_likes ON jobs(like_count DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_plays ON jobs(play_count DESC);
 """
 
 
@@ -68,20 +79,26 @@ async def init_db():
             # Migrate existing table — add missing columns BEFORE schema runs indexes
             cursor = await db.execute("PRAGMA table_info(jobs)")
             columns = [row[1] for row in await cursor.fetchall()]
-            if "platform" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN platform TEXT NOT NULL DEFAULT 'instagram'")
-            if "category" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN category TEXT DEFAULT 'Uncategorized'")
-            if "subcategory" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN subcategory TEXT")
-            if "view_count" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN view_count INTEGER DEFAULT 0")
-            if "like_count" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN like_count INTEGER DEFAULT 0")
-            if "share_count" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN share_count INTEGER DEFAULT 0")
-            if "comment_count" not in columns:
-                await db.execute("ALTER TABLE jobs ADD COLUMN comment_count INTEGER DEFAULT 0")
+            new_cols = {
+                "platform":       "TEXT NOT NULL DEFAULT 'instagram'",
+                "category":       "TEXT DEFAULT 'Uncategorized'",
+                "subcategory":    "TEXT",
+                "view_count":     "INTEGER DEFAULT 0",
+                "like_count":     "INTEGER DEFAULT 0",
+                "share_count":    "INTEGER DEFAULT 0",
+                "comment_count":  "INTEGER DEFAULT 0",
+                "play_count":     "INTEGER DEFAULT 0",
+                "owner_username": "TEXT",
+                "owner_name":     "TEXT",
+                "owner_id":       "TEXT",
+                "duration_sec":   "REAL",
+                "published_at":   "TEXT",
+                "hashtags_json":  "TEXT DEFAULT '[]'",
+                "comments_json":  "TEXT DEFAULT '[]'",
+            }
+            for col, col_type in new_cols.items():
+                if col not in columns:
+                    await db.execute(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}")
             await db.commit()
 
         # Then: run full schema (CREATE TABLE IF NOT EXISTS + indexes)
@@ -371,5 +388,90 @@ async def search_jobs_fts(query: str, category: str | None = None, limit: int = 
             job.pop('_match_score', None)
             
         return jobs[:limit]
+    finally:
+        await db.close()
+
+
+async def get_top_reels(sort_by: str = "likes", limit: int = 10) -> list[dict]:
+    """
+    Get top reels sorted by a virality metric.
+    sort_by: 'likes' | 'plays' | 'shares' | 'comments' | 'hook_rate' | 'engagement'
+    """
+    db = await get_db()
+    try:
+        if sort_by == "hook_rate":
+            order = "CASE WHEN view_count > 0 THEN CAST(play_count AS REAL)/view_count ELSE 0 END DESC"
+        elif sort_by == "engagement":
+            order = "CASE WHEN view_count > 0 THEN CAST((like_count + comment_count + share_count) AS REAL)/view_count ELSE 0 END DESC"
+        elif sort_by == "plays":
+            order = "play_count DESC"
+        elif sort_by == "shares":
+            order = "share_count DESC"
+        elif sort_by == "comments":
+            order = "comment_count DESC"
+        else:  # likes
+            order = "like_count DESC"
+
+        cursor = await db.execute(
+            f"SELECT * FROM jobs WHERE status='done' ORDER BY {order} LIMIT ?",
+            (limit,)
+        )
+        rows = await cursor.fetchall()
+        return [_row_to_dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def get_creators(limit: int = 20) -> list[dict]:
+    """Get top creators by reel count with aggregate engagement stats."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("""
+            SELECT
+                owner_username,
+                owner_name,
+                COUNT(*) as reel_count,
+                SUM(view_count) as total_views,
+                SUM(like_count) as total_likes,
+                SUM(play_count) as total_plays,
+                MAX(published_at) as latest_post
+            FROM jobs
+            WHERE status='done' AND owner_username IS NOT NULL
+            GROUP BY owner_username
+            ORDER BY reel_count DESC, total_likes DESC
+            LIMIT ?
+        """, (limit,))
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def get_trending_hashtags(limit: int = 20) -> list[dict]:
+    """Aggregate hashtag frequency across all analyzed reels."""
+    import json
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT hashtags_json, view_count FROM jobs WHERE status='done' AND hashtags_json IS NOT NULL AND hashtags_json != '[]'"
+        )
+        rows = await cursor.fetchall()
+        tag_counts: dict[str, dict] = {}
+        for row in rows:
+            try:
+                tags = json.loads(row[0] or '[]')
+                views = row[1] or 0
+                for tag in tags:
+                    tag = tag.lower().strip('#')
+                    if not tag:
+                        continue
+                    if tag not in tag_counts:
+                        tag_counts[tag] = {"tag": tag, "count": 0, "total_views": 0}
+                    tag_counts[tag]["count"] += 1
+                    tag_counts[tag]["total_views"] += views
+            except Exception:
+                continue
+        sorted_tags = sorted(tag_counts.values(), key=lambda x: x["count"], reverse=True)
+        return sorted_tags[:limit]
     finally:
         await db.close()

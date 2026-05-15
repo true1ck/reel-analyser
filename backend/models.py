@@ -51,6 +51,15 @@ class JobResponse(BaseModel):
     like_count: int = 0
     share_count: int = 0
     comment_count: int = 0
+    # Enriched fields
+    play_count: int = 0
+    owner_username: str | None = None
+    owner_name: str | None = None
+    owner_id: str | None = None
+    duration_sec: float | None = None
+    published_at: str | None = None
+    hashtags_json: str = '[]'
+    comments_json: str = '[]'
 
 
 class JobListResponse(BaseModel):
@@ -131,3 +140,43 @@ class GlobalChatResponse(BaseModel):
     web_results: list[WebResult]
     total_reports_searched: int
 
+
+# ── Analytics Models ──────────────────────────────────────────────────────────
+
+class TopReelItem(BaseModel):
+    """A reel in a leaderboard list."""
+    id: str
+    reel_id: str
+    url: str
+    title: str | None = None
+    owner_username: str | None = None
+    owner_name: str | None = None
+    category: str = "Uncategorized"
+    subcategory: str | None = None
+    view_count: int = 0
+    play_count: int = 0
+    like_count: int = 0
+    share_count: int = 0
+    comment_count: int = 0
+    duration_sec: float | None = None
+    published_at: str | None = None
+    hook_rate: float | None = None       # computed: play_count / view_count
+    engagement_rate: float | None = None # computed: (likes+comments+shares) / view_count
+
+
+class CreatorItem(BaseModel):
+    """Aggregate stats per creator."""
+    owner_username: str
+    owner_name: str | None = None
+    reel_count: int = 0
+    total_views: int = 0
+    total_likes: int = 0
+    total_plays: int = 0
+    latest_post: str | None = None
+
+
+class HashtagItem(BaseModel):
+    """Trending hashtag entry."""
+    tag: str
+    count: int
+    total_views: int = 0

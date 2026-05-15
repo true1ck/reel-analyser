@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { fetchJob, getVideoUrl, retryJob, deleteJob, sendChatMessage } from '../utils/api';
 import { getCategoryMeta } from './CollectionsPage';
+import StatsPanel from '../components/StatsPanel';
 
 function formatMs(ms) {
   if (!ms) return '—';
@@ -272,25 +273,10 @@ export default function ReportPage() {
               </div>
             </div>
 
-            <div className="report-sidebar__meta glass" style={{ marginTop: '24px' }}>
-              <h4 style={{ marginBottom: '12px', fontSize: '0.9rem', color: 'var(--text-primary)' }}>📊 Engagement</h4>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Views</span>
-                <span className="report-sidebar__meta-value">{formatNumber(job.view_count)}</span>
-              </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Likes</span>
-                <span className="report-sidebar__meta-value">{formatNumber(job.like_count)}</span>
-              </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Shares</span>
-                <span className="report-sidebar__meta-value">{formatNumber(job.share_count)}</span>
-              </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Comments</span>
-                <span className="report-sidebar__meta-value">{formatNumber(job.comment_count)}</span>
-              </div>
             </div>
+
+            {/* Virality Stats Panel — replaces the basic engagement card */}
+            <StatsPanel job={job} />
           </div>
 
           <div className="report-content glass">
