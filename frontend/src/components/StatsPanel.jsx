@@ -130,11 +130,11 @@ export default function StatsPanel({ job, onJobUpdate }) {
   return (
     <div className="stats-panel glass" style={{ position: 'relative' }}>
       {/* Refresh Button Overlay */}
-      <button 
+      <button
         onClick={handleRefresh}
         disabled={isRefreshing}
         style={{
-          position: 'absolute', top: 16, right: 16, 
+          position: 'absolute', top: 16, right: 16,
           background: 'rgba(102,126,234,0.15)', border: '1px solid rgba(102,126,234,0.3)',
           color: 'var(--accent-purple)', borderRadius: 'var(--radius-xl)',
           padding: '4px 10px', fontSize: '0.75rem', fontWeight: 600,
@@ -142,8 +142,8 @@ export default function StatsPanel({ job, onJobUpdate }) {
           display: 'flex', alignItems: 'center', gap: '6px',
           transition: 'all 0.2s ease', opacity: isRefreshing ? 0.7 : 1
         }}
-        onMouseEnter={(e) => { if(!isRefreshing) e.currentTarget.style.background = 'rgba(102,126,234,0.25)' }}
-        onMouseLeave={(e) => { if(!isRefreshing) e.currentTarget.style.background = 'rgba(102,126,234,0.15)' }}
+        onMouseEnter={(e) => { if (!isRefreshing) e.currentTarget.style.background = 'rgba(102,126,234,0.25)' }}
+        onMouseLeave={(e) => { if (!isRefreshing) e.currentTarget.style.background = 'rgba(102,126,234,0.15)' }}
       >
         <span style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none', display: 'inline-block' }}>🔄</span>
         {isRefreshing ? 'Refreshing...' : 'Refresh'}
