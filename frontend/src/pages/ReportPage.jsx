@@ -15,46 +15,24 @@ function formatMs(ms) {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString();
-}
-
-function formatNumber(num) {
-  if (num === undefined || num === null) return '0';
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
+  return new Date(iso).toLocaleDateString('en-GB').replace(/\//g, '/');
 }
 
 /** Extract quick overview fields from the analysis markdown */
 function parseQuickOverview(md) {
-  if (!md) return null;
+  if (!md) return {};
   const overview = {};
+  const summaryMatch = md.match(/\*\*Summary\*\*:\s*(.+)/i);
+  const audienceMatch = md.match(/\*\*Target Audience\*\*:\s*(.+)/i);
+  const intentMatch = md.match(/\*\*Content Intent\*\*:\s*(.+)/i);
   const diffMatch = md.match(/\*\*Difficulty\*\*:\s*(.+)/i);
   const timeMatch = md.match(/\*\*Time to Follow\*\*:\s*(.+)/i);
-  const summaryMatch = md.match(/\*\*Summary\*\*:\s*(.+)/i);
-  const catMatch = md.match(/###\s*📂\s*CATEGORY:\s*(\S+)/i);
+  if (summaryMatch) overview.summary = summaryMatch[1].trim();
+  if (audienceMatch) overview.audience = audienceMatch[1].trim();
+  if (intentMatch) overview.intent = intentMatch[1].trim();
   if (diffMatch) overview.difficulty = diffMatch[1].trim();
   if (timeMatch) overview.timeEstimate = timeMatch[1].trim();
-  if (summaryMatch) overview.summary = summaryMatch[1].trim();
-  if (catMatch) overview.category = catMatch[1].trim().toLowerCase();
-  return Object.keys(overview).length > 0 ? overview : null;
-}
-
-/** Custom renderer for checklist items */
-function ChecklistRenderer({ children }) {
-  // Convert markdown checkboxes to interactive ones
-  const text = String(children);
-  if (text.includes('[ ]') || text.includes('[x]')) {
-    const isChecked = text.includes('[x]');
-    const label = text.replace(/\[[ x]\]\s*/, '');
-    return (
-      <label className="report-checklist-item">
-        <input type="checkbox" defaultChecked={isChecked} />
-        <span>{label}</span>
-      </label>
-    );
-  }
-  return <li>{children}</li>;
+  return overview;
 }
 
 export default function ReportPage() {
@@ -62,16 +40,17 @@ export default function ReportPage() {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  
+  const [transcriptTab, setTranscriptTab] = useState('report');
+
   // Chat state
   const AVAILABLE_SKILLS = [
-    { cmd: '\\reanalyse', desc: 'Re-watch video with Vision AI to answer visual queries' },
-    { cmd: '\\summarize', desc: 'Generate a short summary of the video' },
-    { cmd: '\\extract_tools', desc: 'List all tools mentioned in the video' },
+    { cmd: '\\reanalyse', desc: 'Re-watch video with Vision AI' },
+    { cmd: '\\summarize', desc: 'Generate a short summary' },
+    { cmd: '\\extract_tools', desc: 'List all tools mentioned' },
   ];
-  
+
   const [chatMessages, setChatMessages] = useState([
-    { role: 'system', text: 'Hi! Ask me anything about this video, or type `\\` to see available commands.' }
+    { role: 'ai', text: 'Hi! Ask me anything about this video, or type `\\` to see available commands.' }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
@@ -80,52 +59,24 @@ export default function ReportPage() {
   const [activeSkillIdx, setActiveSkillIdx] = useState(0);
   const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+  useEffect(() => { fetchJob(id).then(setJob).catch(console.error).finally(() => setLoading(false)); }, [id]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [chatMessages]);
+  if (loading) return <div className="rp-loading"><div className="spinner" /></div>;
+  if (!job) return <div className="rp-loading"><p>Job not found.</p></div>;
 
-  useEffect(() => {
-    fetchJob(id).then(setJob).catch(console.error).finally(() => setLoading(false));
-  }, [id]);
+  const handleRetry = async () => { try { const u = await retryJob(id); setJob(u); } catch (e) { alert(e.message); } };
+  const handleDelete = async () => { if (!confirm('Delete this analysis?')) return; try { await deleteJob(id); window.location.href = '/'; } catch (e) { alert(e.message); } };
+  const handleCopyReport = () => { navigator.clipboard.writeText(job.analysis_md || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
-  if (loading) return <div className="page"><div className="spinner" /></div>;
-  if (!job) return <div className="page"><p>Job not found.</p></div>;
-
-  const handleRetry = async () => {
-    try { const updated = await retryJob(id); setJob(updated); } catch (e) { alert(e.message); }
-  };
-  const handleDelete = async () => {
-    if (!confirm('Delete this analysis?')) return;
-    try { await deleteJob(id); window.location.href = '/'; } catch (e) { alert(e.message); }
-  };
-  const handleCopyReport = () => {
-    navigator.clipboard.writeText(job.analysis_md || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Chat Auto-complete Logic
   const filteredSkills = AVAILABLE_SKILLS.filter(s => s.cmd.startsWith(skillFilter));
 
   const handleChatChange = (e) => {
     const val = e.target.value;
     setChatInput(val);
-    
-    // Check if the user is typing a command at the beginning or after a space
-    const words = val.split(' ');
-    const lastWord = words[words.length - 1];
-    
-    if (lastWord.startsWith('\\')) {
-      setShowSkills(true);
-      setSkillFilter(lastWord);
-      setActiveSkillIdx(0);
-    } else {
-      setShowSkills(false);
-    }
+    const lastWord = val.split(' ').at(-1);
+    if (lastWord.startsWith('\\')) { setShowSkills(true); setSkillFilter(lastWord); setActiveSkillIdx(0); }
+    else setShowSkills(false);
   };
 
   const insertSkill = (cmd) => {
@@ -136,223 +87,297 @@ export default function ReportPage() {
   };
 
   const handleChatKeyDown = (e) => {
-    if (showSkills && filteredSkills.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveSkillIdx(prev => (prev + 1) % filteredSkills.length);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveSkillIdx(prev => (prev - 1 + filteredSkills.length) % filteredSkills.length);
-      } else if (e.key === 'Tab' || e.key === 'Enter') {
-        e.preventDefault();
-        insertSkill(filteredSkills[activeSkillIdx].cmd);
-      } else if (e.key === 'Escape') {
-        setShowSkills(false);
-      }
-    }
+    if (!showSkills || filteredSkills.length === 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSkillIdx(p => (p + 1) % filteredSkills.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveSkillIdx(p => (p - 1 + filteredSkills.length) % filteredSkills.length); }
+    else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); insertSkill(filteredSkills[activeSkillIdx].cmd); }
+    else if (e.key === 'Escape') setShowSkills(false);
   };
 
   const handleChatSubmit = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || isChatting) return;
-
     const userMsg = chatInput.trim();
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setChatInput('');
     setIsChatting(true);
-
     try {
       const response = await sendChatMessage(job.id, userMsg);
       setChatMessages(prev => [...prev, { role: 'ai', text: response.reply }]);
     } catch (err) {
       setChatMessages(prev => [...prev, { role: 'system', text: `**Error:** ${err.message}` }]);
-    } finally {
-      setIsChatting(false);
-    }
+    } finally { setIsChatting(false); }
   };
 
   const overview = parseQuickOverview(job.analysis_md);
   const catMeta = getCategoryMeta(job.category);
 
-  return (
-    <div className="page">
-      <Link to="/" className="back-link">← Back to Dashboard</Link>
+  // Parse hashtags from job
+  let hashtags = [];
+  try { hashtags = JSON.parse(job.hashtags_json || '[]'); } catch {}
 
-      <div className="report-header">
-        <h1 className="page__title">{job.title || job.reel_id}</h1>
-        <div className="report-header__actions">
+  return (
+    <div className="rp-page">
+      {/* ── Top Header ── */}
+      <div className="rp-header">
+        <div className="rp-header__left">
+          <div className="rp-header__title-row">
+            <Link to="/" className="rp-back-link">←</Link>
+            <h1 className="rp-title">{job.title || job.reel_id}</h1>
+            {job.status === 'done' && <span className="rp-verified">✓</span>}
+          </div>
+          <div className="rp-hashtags">
+            {hashtags.slice(0, 5).map((tag, i) => (
+              <span key={i} className="rp-hashtag">#{tag}</span>
+            ))}
+          </div>
+        </div>
+        <div className="rp-header__actions">
           {job.status === 'done' && (
             <>
-              <button className="btn btn--ghost btn--sm" onClick={handleCopyReport}>
-                {copied ? '✅ Copied!' : '📋 Copy Report'}
+              <button className="rp-btn rp-btn--ghost" onClick={handleCopyReport}>
+                <span>📋</span> {copied ? 'Copied!' : 'Copy Report'}
               </button>
-              <a 
-                href={`http://localhost:8000/api/jobs/${job.id}/pdf`} 
-                className="btn btn--primary btn--sm" 
-                style={{ textDecoration: 'none' }}
-                download
-              >
-                📄 Download PDF
+              <a href={`http://localhost:8000/api/jobs/${job.id}/pdf`} className="rp-btn rp-btn--ghost" download>
+                <span>📄</span> Download PDF
               </a>
             </>
           )}
-          {job.status === 'failed' && <button className="btn btn--primary btn--sm" onClick={handleRetry}>🔄 Retry</button>}
-          <button className="btn btn--danger btn--sm" onClick={handleDelete}>🗑 Delete</button>
+          {job.status === 'failed' && <button className="rp-btn rp-btn--ghost" onClick={handleRetry}>🔄 Retry</button>}
+          <button className="rp-btn rp-btn--danger" onClick={handleDelete}>🗑 Delete</button>
         </div>
       </div>
 
+      {/* ── Failed Banner ── */}
       {job.status === 'failed' && (
-        <div className="glass" style={{ padding: 20, marginBottom: 24, borderColor: 'var(--error)' }}>
-          <strong style={{ color: 'var(--error)' }}>❌ Analysis Failed</strong>
-          <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>{job.error_message}</p>
+        <div className="rp-error-banner">
+          <strong>❌ Analysis Failed</strong>
+          <p>{job.error_message}</p>
         </div>
       )}
 
+      {/* ── Main Bento Grid ── */}
       {job.status === 'done' && (
-        <div className="report-page">
-          <div className="report-sidebar">
-            <div className="report-sidebar__video">
-              <video controls preload="metadata" src={getVideoUrl(job.id)} />
-            </div>
+        <div className="rp-grid">
 
-            {/* Quick Overview Card */}
-            {overview && (
-              <div className="report-overview glass">
-                {overview.summary && (
-                  <p className="report-overview__summary">{overview.summary}</p>
-                )}
-                <div className="report-overview__badges">
-                  {overview.difficulty && (
-                    <span className={`difficulty-badge difficulty-badge--${overview.difficulty.toLowerCase()}`}>
-                      {overview.difficulty}
-                    </span>
-                  )}
-                  {overview.timeEstimate && (
-                    <span className="time-badge">⏱️ {overview.timeEstimate}</span>
-                  )}
-                </div>
-              </div>
-            )}
+          {/* VIDEO — top left */}
+          <div className="rp-card rp-card--video">
+            <video controls preload="metadata" src={getVideoUrl(job.id)} />
+          </div>
 
-            <div className="report-sidebar__meta glass">
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Category</span>
-                <span className="category-badge" style={{ '--cat-color': catMeta.color }}>
-                  {catMeta.icon} {catMeta.label}
-                </span>
-              </div>
-              {job.subcategory && (
-                <div className="report-sidebar__meta-item">
-                  <span className="report-sidebar__meta-label">Subcategory</span>
-                  <span className="report-sidebar__meta-value">{job.subcategory}</span>
+          {/* QUICK OVERVIEW — top middle */}
+          <div className="rp-card rp-card--overview">
+            <h2 className="rp-card__title">Quick Overview</h2>
+            <div className="rp-overview-list">
+              {overview.summary && (
+                <div className="rp-overview-item">
+                  <span className="rp-overview-item__icon">📄</span>
+                  <div>
+                    <div className="rp-overview-item__label">Summary</div>
+                    <div className="rp-overview-item__text">{overview.summary}</div>
+                  </div>
                 </div>
               )}
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Platform</span>
-                <span className="report-sidebar__meta-value" style={{ textTransform: 'capitalize' }}>{job.platform}</span>
+              {overview.audience && (
+                <div className="rp-overview-item">
+                  <span className="rp-overview-item__icon">👥</span>
+                  <div>
+                    <div className="rp-overview-item__label">Target Audience</div>
+                    <div className="rp-overview-item__text">{overview.audience}</div>
+                  </div>
+                </div>
+              )}
+              {overview.intent && (
+                <div className="rp-overview-item">
+                  <span className="rp-overview-item__icon">🎯</span>
+                  <div>
+                    <div className="rp-overview-item__label">Content Intent</div>
+                    <div className="rp-overview-item__text">{overview.intent}</div>
+                  </div>
+                </div>
+              )}
+              {overview.difficulty && (
+                <div className="rp-overview-item">
+                  <span className="rp-overview-item__icon">⚡</span>
+                  <div>
+                    <div className="rp-overview-item__label">Difficulty</div>
+                    <div className="rp-overview-item__text">{overview.difficulty}</div>
+                  </div>
+                </div>
+              )}
+              {overview.timeEstimate && (
+                <div className="rp-overview-item">
+                  <span className="rp-overview-item__icon">⏱️</span>
+                  <div>
+                    <div className="rp-overview-item__label">Time to Follow</div>
+                    <div className="rp-overview-item__text">{overview.timeEstimate}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CHAT — right, spans all rows */}
+          <div className="rp-card rp-card--chat">
+            <div className="rp-chat__header">
+              <h2 className="rp-card__title">Chat with Video</h2>
+              <Link to="/" className="rp-chat__close">✕</Link>
+            </div>
+            <div className="rp-chat__tab-bar">
+              <span className="rp-chat__tab rp-chat__tab--active">Chat History</span>
+            </div>
+            <div className="rp-chat__messages">
+              {chatMessages.map((msg, idx) => (
+                <div key={idx} className={`rp-bubble rp-bubble--${msg.role}`}>
+                  {msg.role === 'ai' && <span className="rp-bubble__avatar">🤖</span>}
+                  <div className="rp-bubble__text">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                  </div>
+                </div>
+              ))}
+              {isChatting && (
+                <div className="rp-bubble rp-bubble--ai">
+                  <span className="rp-bubble__avatar">🤖</span>
+                  <div className="rp-bubble__text chat-bubble--loading">
+                    <span className="dot"/><span className="dot"/><span className="dot"/>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="rp-chat__suggestions">
+              <button className="rp-suggestion" onClick={() => setChatInput('What are the key points?')}>What are the key points?</button>
+              <button className="rp-suggestion" onClick={() => setChatInput('Who is the target audience?')}>Who is the target audience?</button>
+              <button className="rp-suggestion" onClick={() => setChatInput('What makes this video viral?')}>What makes this video viral?</button>
+            </div>
+            <form className="rp-chat__form" onSubmit={handleChatSubmit}>
+              <div className="rp-chat__input-wrap">
+                {showSkills && filteredSkills.length > 0 && (
+                  <div className="skills-dropdown">
+                    {filteredSkills.map((skill, idx) => (
+                      <div key={skill.cmd}
+                        className={`skills-dropdown__item ${idx === activeSkillIdx ? 'skills-dropdown__item--active' : ''}`}
+                        onClick={() => insertSkill(skill.cmd)}
+                        onMouseEnter={() => setActiveSkillIdx(idx)}
+                      >
+                        <span className="skills-dropdown__cmd">{skill.cmd}</span>
+                        <span className="skills-dropdown__desc">{skill.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  className="rp-chat__input"
+                  placeholder="Type your message..."
+                  value={chatInput}
+                  onChange={handleChatChange}
+                  onKeyDown={handleChatKeyDown}
+                  disabled={isChatting}
+                  autoComplete="off"
+                />
               </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Video ID</span>
-                <span className="report-sidebar__meta-value">{job.reel_id}</span>
+              <button type="submit" className="rp-chat__send" disabled={isChatting || !chatInput.trim()}>➤</button>
+            </form>
+          </div>
+
+          {/* DETAILS & METRICS — middle left */}
+          <div className="rp-card rp-card--metrics">
+            <h2 className="rp-card__title">Details & Metrics</h2>
+            <div className="rp-metrics-list">
+              <div className="rp-metric-row">
+                <span className="rp-metric-row__label">Category</span>
+                <span className="rp-metric-row__value">
+                  <span className="category-badge" style={{ '--cat-color': catMeta.color }}>{catMeta.icon} {catMeta.label}</span>
+                </span>
               </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Status</span>
-                <span className="report-sidebar__meta-value" style={{ color: 'var(--accent-teal)' }}>✅ Complete</span>
+              <div className="rp-metric-row">
+                <span className="rp-metric-row__label">Platform</span>
+                <span className="rp-metric-row__value" style={{ textTransform: 'capitalize' }}>{job.platform}</span>
               </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Processing</span>
-                <span className="report-sidebar__meta-value">{formatMs(job.processing_ms)}</span>
+              <div className="rp-metric-row">
+                <span className="rp-metric-row__label">Status</span>
+                <span className="rp-status-pill">Complete</span>
               </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">Analyzed</span>
-                <span className="report-sidebar__meta-value">{formatDate(job.completed_at)}</span>
+              <div className="rp-metric-row">
+                <span className="rp-metric-row__label">Time Spent</span>
+                <span className="rp-metric-row__value">{formatMs(job.processing_ms)}</span>
               </div>
-              <div className="report-sidebar__meta-item">
-                <span className="report-sidebar__meta-label">URL</span>
-                <span className="report-sidebar__meta-value"><a href={job.url} target="_blank" rel="noopener" style={{ color: 'var(--accent-purple)', textDecoration: 'none' }}>Open ↗</a></span>
+              <div className="rp-metric-row">
+                <span className="rp-metric-row__label">Analyzed</span>
+                <span className="rp-metric-row__value">{formatDate(job.completed_at)}</span>
+              </div>
+              <div className="rp-metric-row">
+                <span className="rp-metric-row__label">Open Original Link</span>
+                <a href={job.url} target="_blank" rel="noopener" className="rp-metric-row__link">↗</a>
               </div>
             </div>
-
-            {/* Virality Stats Panel — replaces the basic engagement card */}
+            {/* Virality stats tucked in below */}
             <StatsPanel job={job} onJobUpdate={setJob} />
           </div>
 
-          <div className="report-content glass">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-              components={{
-                // Make checkboxes interactive
-                input: ({ type, checked, ...props }) => {
-                  if (type === 'checkbox') {
-                    return <input type="checkbox" defaultChecked={checked} className="report-checkbox" />;
-                  }
-                  return <input type={type} {...props} />;
-                }
-              }}
-            >
-              {job.analysis_md || '*No analysis content*'}
-            </ReactMarkdown>
-
-            {job.transcript && (
-              <>
-                <h3>📝 Full Transcript</h3>
-                <p style={{ fontStyle: 'italic' }}>{job.transcript}</p>
-              </>
-            )}
-          </div>
-
-          <div className="report-right-sidebar">
-            {/* Chat Panel */}
-            <div className="report-chat glass">
-              <div className="report-chat__header">
-                <h3>💬 Chat with Video</h3>
-              </div>
-              <div className="report-chat__messages">
-                {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`chat-bubble chat-bubble--${msg.role}`}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
-                  </div>
-                ))}
-                {isChatting && (
-                  <div className="chat-bubble chat-bubble--ai chat-bubble--loading">
-                    <span className="dot"></span><span className="dot"></span><span className="dot"></span>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-              <form className="report-chat__input" onSubmit={handleChatSubmit}>
-                <div className="report-chat__input-wrapper">
-                  {showSkills && filteredSkills.length > 0 && (
-                    <div className="skills-dropdown">
-                      {filteredSkills.map((skill, idx) => (
-                        <div 
-                          key={skill.cmd} 
-                          className={`skills-dropdown__item ${idx === activeSkillIdx ? 'skills-dropdown__item--active' : ''}`}
-                          onClick={() => insertSkill(skill.cmd)}
-                          onMouseEnter={() => setActiveSkillIdx(idx)}
-                        >
-                          <span className="skills-dropdown__cmd">{skill.cmd}</span>
-                          <span className="skills-dropdown__desc">{skill.desc}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <input
-                    type="text"
-                    placeholder="Ask a question or type \ ..."
-                    value={chatInput}
-                    onChange={handleChatChange}
-                    onKeyDown={handleChatKeyDown}
-                    disabled={isChatting}
-                    autoComplete="off"
-                  />
+          {/* TRANSCRIPT & ANALYSIS — middle center */}
+          <div className="rp-card rp-card--transcript">
+            <div className="rp-tabs">
+              <button className={`rp-tab ${transcriptTab === 'report' ? 'rp-tab--active' : ''}`} onClick={() => setTranscriptTab('report')}>Full Analysis</button>
+              <button className={`rp-tab ${transcriptTab === 'transcript' ? 'rp-tab--active' : ''}`} onClick={() => setTranscriptTab('transcript')}>Transcript</button>
+            </div>
+            <div className="rp-transcript-body">
+              {transcriptTab === 'report' ? (
+                <div className="report-content">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      input: ({ type, checked }) => {
+                        if (type === 'checkbox') return <input type="checkbox" defaultChecked={checked} className="report-checkbox" />;
+                        return <input type={type} />;
+                      }
+                    }}
+                  >
+                    {job.analysis_md || '*No analysis content yet.*'}
+                  </ReactMarkdown>
                 </div>
-                <button type="submit" disabled={isChatting || !chatInput.trim()}>
-                  Send
-                </button>
-              </form>
+              ) : (
+                <p className="rp-transcript-text">
+                  {job.transcript || 'No transcript available.'}
+                </p>
+              )}
             </div>
           </div>
+
+          {/* CREATOR — bottom left */}
+          <div className="rp-card rp-card--creator">
+            <h2 className="rp-card__title">Creator</h2>
+            <div className="rp-creator">
+              <div className="rp-creator__avatar">
+                {(job.owner_username || '?')[0].toUpperCase()}
+              </div>
+              <div className="rp-creator__info">
+                <a href={job.url} target="_blank" rel="noopener" className="rp-creator__name">
+                  {job.owner_name || job.owner_username || 'Unknown'}
+                </a>
+                <span className="rp-creator__handle">@{job.owner_username || 'unknown'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* TOOLS & RESOURCES — bottom center */}
+          <div className="rp-card rp-card--tools">
+            <h2 className="rp-card__title">Tools & Resources</h2>
+            <div className="rp-tools-grid">
+              <a href={`http://localhost:8000/api/jobs/${job.id}/pdf`} className="rp-tool-btn" download>
+                <span className="rp-tool-btn__icon">📄</span>
+                <span className="rp-tool-btn__label">Download PDF</span>
+                <span className="rp-tool-btn__arrow">»</span>
+              </a>
+              <button className="rp-tool-btn" onClick={handleCopyReport}>
+                <span className="rp-tool-btn__icon">📋</span>
+                <span className="rp-tool-btn__label">Copy Report</span>
+                <span className="rp-tool-btn__arrow">»</span>
+              </button>
+            </div>
+          </div>
+
         </div>
       )}
     </div>
