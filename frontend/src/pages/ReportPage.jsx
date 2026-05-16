@@ -257,9 +257,12 @@ export default function ReportPage() {
               {activeTab === 'report' && <div className="rp-v3-md"><ReactMarkdown remarkPlugins={[remarkGfm]}>{partitioned.report}</ReactMarkdown></div>}
               {activeTab === 'transcript' && (
                 <div className="rp-v3-text">
-                  {job.transcript && <div>{job.transcript}</div>}
+                  {/* Only show raw transcript if the formatted 'Original Transcript' isn't already in the extras */}
+                  {job.transcript && !partitioned.extras.toLowerCase().includes('original transcript') && (
+                    <div style={{ marginBottom: '24px' }}>{job.transcript}</div>
+                  )}
                   {partitioned.extras && (
-                    <div className="rp-v3-md" style={{ marginTop: job.transcript ? '24px' : '0', borderTop: job.transcript ? '1px solid var(--border-color)' : 'none', paddingTop: job.transcript ? '24px' : '0' }}>
+                    <div className="rp-v3-md">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{partitioned.extras}</ReactMarkdown>
                     </div>
                   )}
