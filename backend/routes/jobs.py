@@ -319,6 +319,36 @@ async def chat_with_job(job_id: str, body: ChatRequest):
 
 # ── Analytics Endpoints ────────────────────────────────────────────────────────────
 
+    # ── Logic Branch 2: Standard Text RAG ──
+    transcript = job.get("transcript", "No transcript available.")
+    analysis_md = job.get("analysis_md", "No analysis available.")
+    
+    prompt = f"""You are a helpful AI assistant answering questions about a specific video.
+Use the provided transcript and analysis notes to answer the user's question accurately.
+If the answer is not in the provided text, just say you don't know based on the current notes.
+
+TRANSCRIPT:
+{transcript}
+
+ANALYSIS NOTES:
+{analysis_md}
+
+USER QUESTION: {user_msg}
+"""
+    
+    try:
+        import asyncio
+        reply = await asyncio.to_thread(_run_text_pass, prompt)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat generation failed: {str(e)}")
+        
+    return ChatResponse(reply=reply)
+
+
+# ── Analytics Endpoints ────────────────────────────────────────────────────────────
+
+
+
 @router.get("/analytics/top", response_model=list[TopReelItem])
 async def get_top_reels_endpoint(
     sort_by: str = Query("likes", description="likes | plays | shares | comments | hook_rate | engagement"),
@@ -360,28 +390,3 @@ async def get_trending_hashtags_endpoint(limit: int = Query(20, ge=1, le=100)):
     tags = await get_trending_hashtags(limit=limit)
     return [HashtagItem(**t) for t in tags]
 
-        
-    # ── Logic Branch 2: Standard Text RAG ──
-    transcript = job.get("transcript", "No transcript available.")
-    analysis_md = job.get("analysis_md", "No analysis available.")
-    
-    prompt = f"""You are a helpful AI assistant answering questions about a specific video.
-Use the provided transcript and analysis notes to answer the user's question accurately.
-If the answer is not in the provided text, just say you don't know based on the current notes.
-
-TRANSCRIPT:
-{transcript}
-
-ANALYSIS NOTES:
-{analysis_md}
-
-USER QUESTION: {user_msg}
-"""
-    
-    try:
-        import asyncio
-        reply = await asyncio.to_thread(_run_text_pass, prompt)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat generation failed: {str(e)}")
-        
-    return ChatResponse(reply=reply)
